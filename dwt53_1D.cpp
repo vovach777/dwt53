@@ -23,8 +23,8 @@ int sizeof_H(int x)
 static void dwt53(const int *x, int size, int *L, int *H) 
 {
     // predict 1
-    int j_size=0;
-    for (int i=1,j=0; i < size; i+=2, ++j, ++j_size ) {
+    
+    for (int i=1,j=0; i < size; i+=2, ++j ) {
         const int _b = x[i-1];
         const int b_ = i+1 < size ? x[i+1] : _b;
         H[j] = x[i] - (_b + b_)/2;        

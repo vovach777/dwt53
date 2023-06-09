@@ -1,4 +1,4 @@
-//https://godbolt.org/z/KPKTqz61M
+//https://godbolt.org/z/hcv9ef9Gd
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -22,39 +22,118 @@ int sizeof_H(int x)
 
 static void dwt53(const int *x, int size, int *L, int *H) 
 {
-    // predict 1
-    
-    for (int i=1,j=0; i < size; i+=2, ++j ) {
-        const int _b = x[i-1];
-        const int b_ = i+1 < size ? x[i+1] : _b;
-        H[j] = x[i] - (_b + b_)/2;        
-    }
-    // update 1    
-    for (int i=0,j=0,j_size=sizeof_H(size); i < size; i+=2, ++j) {
-        const int _a = H[j];
-        const int a_ = H[min(j+1,j_size) ];
-        L[j] = x[i] + (_a + a_ + 2)/4;
+    if (size & 1) {
+        //C-variant
+        int*H_p=H;
+        const int*x_p=x+1;
+        int s=size/2;        
+        while (s--) {
+            *H_p++ = x_p[0] - (x_p[-1] + x_p[1])/2;
+            x_p += 2;
+        }        
+        int *L_p = L;
+        //A-variant
+        *L_p++ = x[0]+(H[0] + 1)/2;
+        //D-variant
+        s = (size+1)/2-2;
+        x_p=x+2;
+        H_p = H;
+        while (s--) {
+            *L_p++ = x_p[0] + (H_p[0] + H_p[1] + 2) / 4;
+            H_p+=1;
+            x_p+=2;
+        }
+        //B-variant
+        *L_p++ = x_p[0]+(H_p[-1] + 1) /2; 
+
+    } else {
+        //C-variant
+        int s=size/2-1;
+        int *H_p=H;
+        const int *x_p=x+1;
+        while (s--) {
+            *H_p++ = x_p[0] - (x_p[-1] + x_p[1])/2;
+            x_p += 2;
+        }
+        //E-variant
+        *H_p=x_p[0]-x_p[-1];
+        s=size/2-1;
+        int *L_p=L;
+        H_p=H;
+        //A-variant
+        *L_p++ = x[0] + (H_p[0]+1)/2;
+        //D-variant
+        x_p = x + 2;
+        while (s--) {
+            *L_p++ = x_p[0] + (H_p[0] + H_p[1] + 2) / 4;
+            H_p+=1;
+            x_p+=2;
+        }
     }
 }
 
 
 static void idwt53(int *x, int size, const int *L, const int *H) 
-{
+{    
+    if (size & 1) {
+        const int *L_p = L;
+        //A-variant
+        //*L_p++ = x[0]+(H[0] + 1)/2;
+        x[0] = *L_p++ -(H[0] + 1)/2;
+        //D-variant
+        int s = (size+1)/2-2;
+        int * x_p=x+2;
+        const int* H_p = H;
+        while (s--) {
+            //*L_p++ = x_p[0] + (H_p[0] + H_p[1] + 2) / 4;
+            x_p[0] = *L_p++ - (H_p[0] + H_p[1] + 2) / 4;
+            H_p+=1;
+            x_p+=2;
+        }
+        //B-variant
+        //*L_p++ = x_p[0]+(H_p[-1] + 1) /2; 
+        x_p[0] = *L_p++ - (H_p[-1] + 1) /2; 
 
-    // update 1    
-    for (int i=0,j=0,j_size=sizeof_H(size); i < size; i+=2, ++j) {
-        const int _a = H[j];
-        const int a_ = H[min(j+1,j_size) ];
-        //L[j] = x[i] + (_a + a_ + 2)/4;
-        x[i] =  L[j] - (_a + a_ + 2)/4;
-    }
+        //C-variant
+        H_p=H;
+        x_p=x+1;
+        s=size/2;        
+        while (s--) {
+            //*H_p++ = x_p[0] - (x_p[-1] + x_p[1])/2;
+            x_p[0] = *H_p++ + (x_p[-1] + x_p[1])/2;
+            x_p += 2;
+        }        
+    } else {
+        //LLLLLL
+        //////
+        int s=size/2-1;
+        const int *L_p=L;
+        const int *H_p=H;
+        //A-variant
+        //*L_p++ = x_p[0] + (H_p[0]+1)/2;
+        x[0] = *L_p++ - (H_p[0]+1)/2;
+        //D-variant
+        int *x_p = x + 2;
+        while (s--) {
+            //*L_p++ = x_p[0] + (H_p[0] + H_p[1] + 2) / 4;
+            x_p[0] =  *L_p++ - (H_p[0] + H_p[1] + 2) / 4;
+            H_p+=1;
+            x_p+=2;
+        }
+        //HHHHHHH
+        //C-variant
+        s=size/2-1;
+        H_p=H;
+        x_p=x+1;
+        while (s--) {
+            //*H_p++ = x_p[0] - (x_p[-1] + x_p[1])/2;
+            x_p[0] = *H_p++ + (x_p[-1] + x_p[1])/2;
+            x_p += 2;
+        }
+        //E-variant
+        //*H_p=x_p[0]-x_p[-1];
+        x_p[0] = *H_p+x_p[-1];
 
-    // predict 1
-    for (int i=1,j=0; i < size; i+=2, ++j ) {
-        const int _b = x[i-1];
-        const int b_ = i+1 < size ? x[i+1] : _b;
-        //H[j] = x[i] - (_b + b_)/2; 
-        x[i] = H[j] + (_b + b_)/2;
     }
 }
 
@@ -64,7 +143,7 @@ int main() {
 
     for (int iter=0; iter<10000; ++iter)
     {
-        int size = max( rand() % 64, 8);
+        int size = max( rand() % 1920, 8);
         vector<int> data(size);
         for (auto& v : data) {
             v = rand() % 256;

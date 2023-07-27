@@ -158,6 +158,11 @@ static void idwt53(int *x, int size, const int *L, const int *H)
     }
 }
 
+
+#ifdef __cplusplus
+#include <vector>
+
+
 static void dwt53_inplace(int*xy, int size)
 {
    std::vector<int> tmp(size);
@@ -171,3 +176,4 @@ static void idwt53_inplace(int*xy, int size)
    idwt53(tmp.data(),size, xy, xy + sizeof_L(size));
    std::copy(tmp.begin(), tmp.end(), xy);
 }
+#endif

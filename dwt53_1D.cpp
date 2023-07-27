@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <string.h>
 #include <vector>
-#include "dwt53_1d.h"
+#include "dwt53.hpp"
 using namespace std;
 
 

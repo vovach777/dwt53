@@ -176,4 +176,61 @@ static void idwt53_inplace(int*xy, int size)
    idwt53(tmp.data(),size, xy, xy + sizeof_L(size));
    std::copy(tmp.begin(), tmp.end(), xy);
 }
+
+static void transpose(the_matrix & data) {
+    // this assumes that all inner vectors have the same size and
+    // allocates space for the complete result in advance
+    the_matrix result(data[0].size(), std::vector<int>(data.size()));
+    for (int i = 0; i < data[0].size(); i++) 
+        for (int j = 0; j < data.size(); j++) {
+            result[i][j] = data[j][i];
+        }
+    data = result;
+}
+
+static void dwt53_rows(the_matrix &data, int levels)
+{
+    for (auto & row : data ) {        
+        for (int level = 1;  level <= levels; level++)
+        {
+                auto size =  row.size() >> (level-1);
+                if (size > 1) {
+                    dwt53_inplace( row.data(), size );
+                }
+                
+        }
+    }
+}
+
+static void inv_dwt53_rows(the_matrix &data, int levels)
+{
+    for (auto & row : data ) {        
+        for (int level = levels; level > 0; level--)
+        {
+            auto size =  row.size() >> (level-1);
+            if (size > 1) {
+                idwt53_inplace( row.data(), size );
+            }
+        }
+    }
+}
+
+
+static void dwt53_2d(the_matrix & data, int levels) 
+{
+    dwt53_rows(data, levels);
+    transpose(data);
+    dwt53_rows(data, levels);
+
+}
+
+static void inv_dwt53_2d(the_matrix & data, int levels) 
+{
+    inv_dwt53_rows(data, levels);
+    transpose(data);
+    inv_dwt53_rows(data, levels);
+
+}
+
+
 #endif

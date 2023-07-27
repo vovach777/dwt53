@@ -160,6 +160,7 @@ static void idwt53(int *x, int size, const int *L, const int *H)
 
 
 #ifdef __cplusplus
+#ifdef THE_MATRIX_DEFINED
 #include <vector>
 
 
@@ -232,5 +233,5 @@ static void inv_dwt53_2d(the_matrix & data, int levels)
 
 }
 
-
+#endif
 #endif

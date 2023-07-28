@@ -178,41 +178,71 @@ static void idwt53_inplace(int*xy, int size)
    std::copy(tmp.begin(), tmp.end(), xy);
 }
 
-static void transpose(the_matrix & data) {
-    // this assumes that all inner vectors have the same size and
-    // allocates space for the complete result in advance
-    the_matrix result(data[0].size(), std::vector<int>(data.size()));
-    for (int i = 0; i < data[0].size(); i++) 
-        for (int j = 0; j < data.size(); j++) {
-            result[i][j] = data[j][i];
-        }
-    data = result;
-}
+static void transpose(the_matrix& matrix) {
+    const auto rows = matrix.size();
+    const auto cols = matrix[0].size();
 
-static void dwt53_rows(the_matrix &data, int levels)
-{
-    for (auto & row : data ) {        
-        for (int level = 1;  level <= levels; level++)
-        {
-                auto size =  row.size() >> (level-1);
-                if (size > 1) {
-                    dwt53_inplace( row.data(), size );
-                }
-                
+    if (rows != cols) {
+        // Матрица не квадратная, выполняем перемещение
+        the_matrix transposed(cols, vector<int>(rows));
+
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                transposed[j][i] = matrix[i][j];
+            }
+        }
+
+        std::swap(matrix,transposed);
+    } else {
+        // Матрица квадратная, выполняем обмен элементами
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < i; ++j) {
+                swap(matrix[i][j], matrix[j][i]);
+            }
         }
     }
 }
 
-static void inv_dwt53_rows(the_matrix &data, int levels)
+static std::vector<int> calc_L_sizes( int size, int levels)
+{
+    std::vector<int> sizes(levels);
+    sizes.clear();
+    for (int level = 1; level <= levels && (size > 1); level++, size = sizeof_L(size))
+    {
+        sizes.push_back( size );
+    }
+    return sizes;
+}
+
+static void dwt53_lvl( std::vector<int> & row, int levels) 
+{
+    auto sizes = calc_L_sizes(row.size(), levels);    
+    for (const auto s : sizes )
+        dwt53_inplace( row.data(), s);
+}
+
+static void idwt53_lvl( std::vector<int> & row, int levels) 
+{
+    auto sizes = calc_L_sizes(row.size(),levels);
+
+    for (auto it = sizes.rbegin(); it != sizes.rend(); ++it) {
+        const auto s = *it;
+        idwt53_inplace( row.data(), s );
+    }
+}
+
+
+static void dwt53_rows(the_matrix &data, int levels)
 {
     for (auto & row : data ) {        
-        for (int level = levels; level > 0; level--)
-        {
-            auto size =  row.size() >> (level-1);
-            if (size > 1) {
-                idwt53_inplace( row.data(), size );
-            }
-        }
+        dwt53_lvl(row, levels)
+    }
+}
+
+static void idwt53_rows(the_matrix &data, int levels)
+{
+    for (auto & row : data ) {        
+        idwt53_lvl(row, levels);
     }
 }
 

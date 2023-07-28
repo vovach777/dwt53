@@ -197,7 +197,7 @@ static void transpose(the_matrix& matrix) {
         // Матрица квадратная, выполняем обмен элементами
         for (int i = 0; i < rows; ++i) {
             for (int j = 0; j < i; ++j) {
-                swap(matrix[i][j], matrix[j][i]);
+                std::swap(matrix[i][j], matrix[j][i]);
             }
         }
     }
@@ -235,7 +235,7 @@ static void idwt53_lvl( std::vector<int> & row, int levels)
 static void dwt53_rows(the_matrix &data, int levels)
 {
     for (auto & row : data ) {        
-        dwt53_lvl(row, levels)
+        dwt53_lvl(row, levels);
     }
 }
 

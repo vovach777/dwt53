@@ -257,9 +257,9 @@ static void dwt53_2d(the_matrix & data, int levels)
 
 static void inv_dwt53_2d(the_matrix & data, int levels) 
 {
-    inv_dwt53_rows(data, levels);
+    idwt53_rows(data, levels);
     transpose(data);
-    inv_dwt53_rows(data, levels);
+    idwt53_rows(data, levels);
 
 }
 

@@ -184,7 +184,7 @@ static void transpose(the_matrix& matrix) {
 
     if (rows != cols) {
         // Матрица не квадратная, выполняем перемещение
-        the_matrix transposed(cols, vector<int>(rows));
+        the_matrix transposed(cols, std::vector<int>(rows));
 
         for (int i = 0; i < rows; ++i) {
             for (int j = 0; j < cols; ++j) {

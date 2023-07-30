@@ -250,7 +250,7 @@ static void idwt53_rows(the_matrix &data, int levels)
 static void dwt53_2d(the_matrix & data, int levels) 
 {
    //limit_levels
-    levels = calc_L_sizes( std::min(data.size(), data[0].size()) ).size();
+    levels = calc_L_sizes( std::min(data.size(), data[0].size()) , levels).size();
     if (levels > 0)
     {
       dwt53_rows(data, levels);
@@ -263,7 +263,7 @@ static void dwt53_2d(the_matrix & data, int levels)
 static void inv_dwt53_2d(the_matrix & data, int levels) 
 {
    //limit_levels
-    levels = calc_L_sizes( std::min(data.size(), data[0].size()) ).size();
+    levels = calc_L_sizes( std::min(data.size(), data[0].size()), levels ).size();
     if (levels > 0)
     {
       idwt53_rows(data, levels);
@@ -324,7 +324,7 @@ static std::vector<dwt2d::LevelBlock> get_dwt_sizes(the_matrix const& a, int lev
 static void scalar_quant_example(the_matrix & a, int levels, int Q) 
 {
   
-    auto sizes = get_dwt_sizes(data_copy,levels);
+    auto sizes = get_dwt_sizes(a,levels);
     for (auto const & si : sizes)
     {
         if (Q < 1)
@@ -336,21 +336,21 @@ static void scalar_quant_example(the_matrix & a, int levels, int Q)
         for (int y=0; y < si.HH.y.size; ++y)
         for (int x=0; x < si.HH.x.size; ++x)
         {
-            auto & coof_hh = data_copy[x + si.HH.x.offs][y + si.HH.y.offs];
+            auto & coof_hh = a[x + si.HH.x.offs][y + si.HH.y.offs];
             
             coof_hh = ((coof_hh + (Q)) / (Q*2)) * (Q*2);
         }
         for (int y=0; y < si.HL.y.size; ++y)
         for (int x=0; x < si.HL.x.size; ++x)
         {
-            auto & coof_hl = data_copy[x + si.HL.x.offs][y + si.HL.y.offs];
+            auto & coof_hl = a[x + si.HL.x.offs][y + si.HL.y.offs];
             
             coof_hl = ((coof_hl + (Q/2)) / Q) * Q;
         }
         for (int y=0; y < si.LH.y.size; ++y)
         for (int x=0; x < si.LH.x.size; ++x)
         {
-            auto & coof_lh = data_copy[x + si.LH.x.offs][y + si.LH.y.offs];
+            auto & coof_lh = a[x + si.LH.x.offs][y + si.LH.y.offs];
             
             coof_lh = ((coof_lh + (Q/2)) / Q) * Q;
         }

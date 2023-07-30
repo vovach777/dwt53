@@ -249,17 +249,27 @@ static void idwt53_rows(the_matrix &data, int levels)
 
 static void dwt53_2d(the_matrix & data, int levels) 
 {
-    dwt53_rows(data, levels);
-    transpose(data);
-    dwt53_rows(data, levels);
+   //limit_levels
+    levels = calc_L_sizes( std::min(data.size(), data[0].size()) ).size();
+    if (levels > 0)
+    {
+      dwt53_rows(data, levels);
+      transpose(data);
+      dwt53_rows(data, levels);
+    }
 
 }
 
 static void inv_dwt53_2d(the_matrix & data, int levels) 
 {
-    idwt53_rows(data, levels);
-    transpose(data);
-    idwt53_rows(data, levels);
+   //limit_levels
+    levels = calc_L_sizes( std::min(data.size(), data[0].size()) ).size();
+    if (levels > 0)
+    {
+      idwt53_rows(data, levels);
+      transpose(data);
+      idwt53_rows(data, levels);
+    }
 
 }
 

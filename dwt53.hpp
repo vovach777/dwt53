@@ -1,4 +1,4 @@
-// original development is here: https://godbolt.org/z/Y9rKMPTcW
+// original development is here: https://godbolt.org/z/rd8xda6vn
 #pragma once
 /*
   * variants *
@@ -396,7 +396,7 @@ static void process_levels(the_matrix & a, int levels, bool is_transposed, F f)
 }
 
 
-void compress_data(the_matrix & data, int levels=5, int Q=16, int details_level=2)
+static void compress_data(the_matrix & data, int levels=5, int Q=16, int details_level=2)
 {
     dwt53_2d(data,levels); 
     //make sure dwt is transposed (for speed optimization reasons)
@@ -417,7 +417,7 @@ void compress_data(the_matrix & data, int levels=5, int Q=16, int details_level=
   });  
 }
 
-void decompress_data(the_matrix & data, int levels=5, int Q=16, int details_level=2)
+static void decompress_data(the_matrix & data, int levels=5, int Q=16, int details_level=2)
 {
     
     //make sure dwt is transposed (for speed optimization reasons)

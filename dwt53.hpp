@@ -315,21 +315,25 @@ static std::vector<dwt2d::LevelBlock> get_dwt_sizes(the_matrix const& a, int lev
         lb.HL.x.size = sizeof_H(x_sizes[i]);
         lb.HL.y.offs = 0;
         lb.HL.y.size = sizeof_H(y_sizes[i]);
-        lb.HH.x.offs =  lb.HL.x.offs;
-        lb.HH.y.offs =  lb.HL.y.size;
-        lb.HH.x.size = sizeof_L(y_sizes[i]); 
-        lb.HH.y.size = lb.HL.y.size;
-        lb.LH.x.offs = 0;
+     
+        lb.LH.x.offs = 0; 
         lb.LH.x.size = sizeof_L(x_sizes[i]);
-        lb.LH.y.offs = lb.HH.y.offs;
-        lb.LH.y.size = lb.HH.y.size;
+        lb.LH.y.offs = sizeof_L(y_sizes[i]);        
+        lb.LH.y.size = sizeof_H(y_sizes[i]);
+
+        lb.HH.x.offs = sizeof_L(x_sizes[i]); 
+        lb.HH.x.size = sizeof_H(x_sizes[i]);
+        lb.HH.y.offs = sizeof_L(y_sizes[i]);        
+        lb.HH.y.size = sizeof_H(y_sizes[i]);
     }
     return result;
 }
 
 static void scalar_quant_example(the_matrix & a, int levels, int Q) 
-{
-  
+{  
+    // int height = a.size();
+    // int width =  a[0].size();
+    // std::cout << "scalar_quant size:" << height << "x" << width << std::endl;
     auto sizes = get_dwt_sizes(a,levels);
     for (auto const & si : sizes)
     {
@@ -342,22 +346,19 @@ static void scalar_quant_example(the_matrix & a, int levels, int Q)
         for (int y=0; y < si.HH.y.size; ++y)
         for (int x=0; x < si.HH.x.size; ++x)
         {
-            auto & coof_hh = a[x + si.HH.x.offs][y + si.HH.y.offs];
-            
+            auto & coof_hh = a[x + si.HH.x.offs][y + si.HH.y.offs];            
             coof_hh = ((coof_hh + (Q)) / (Q*2)) * (Q*2);
         }
         for (int y=0; y < si.HL.y.size; ++y)
         for (int x=0; x < si.HL.x.size; ++x)
         {
-            auto & coof_hl = a[x + si.HL.x.offs][y + si.HL.y.offs];
-            
+            auto & coof_hl = a[x + si.HL.x.offs][y + si.HL.y.offs];            
             coof_hl = ((coof_hl + (Q/2)) / Q) * Q;
         }
         for (int y=0; y < si.LH.y.size; ++y)
         for (int x=0; x < si.LH.x.size; ++x)
         {
-            auto & coof_lh = a[x + si.LH.x.offs][y + si.LH.y.offs];
-            
+            auto & coof_lh = a[x + si.LH.x.offs][y + si.LH.y.offs];            
             coof_lh = ((coof_lh + (Q/2)) / Q) * Q;
         }
         Q /= 2;

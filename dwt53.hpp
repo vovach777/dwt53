@@ -45,10 +45,12 @@ static int sizeof_H(int x)
 static void dwt53(const int *x, int size, int *L, int *H) 
 {
     if (size & 1) {
+        std::cout << ":: dwt53 :: size & 1 == 1, size = " << size << std::endl;
         //C-variant
         int*H_p=H;
         const int*x_p=x+1;
-        int s=size/2;        
+        int s=size/2;
+
         while (s--) {
             *H_p++ = x_p[0] - (x_p[-1] + x_p[1])/2;
             x_p += 2;
@@ -58,6 +60,7 @@ static void dwt53(const int *x, int size, int *L, int *H)
         *L_p++ = x[0]+(H[0] + 1)/2;
         //D-variant
         s = (size+1)/2-2;
+        std::cout << ":: dwt53 :: D-variant count = " << s << std::endl;
         x_p=x+2;
         H_p = H;
         while (s--) {
@@ -66,7 +69,7 @@ static void dwt53(const int *x, int size, int *L, int *H)
             x_p+=2;
         }
         //B-variant
-        *L_p++ = x_p[0]+(H_p[-1] + 1) /2; 
+        *L_p++ = x_p[0]+(H_p[size>>1] + 1) /2; 
 
     } else {
         //C-variant
@@ -113,7 +116,7 @@ static void idwt53(int *x, int size, const int *L, const int *H)
         }
         //B-variant
         //*L_p++ = x_p[0]+(H_p[-1] + 1) /2; 
-        x_p[0] = *L_p++ - (H_p[-1] + 1) /2; 
+        x_p[0] = *L_p++ - (H_p[size>>1] + 1) /2; 
 
         //C-variant
         H_p=H;
@@ -251,11 +254,12 @@ static void dwt53_2d(the_matrix & data, int levels)
 {
    //limit_levels
     levels = calc_L_sizes( std::min(data.size(), data[0].size()) , levels).size();
+    std::cout << "::dwt53_2d:: " << levels << std::endl;
     if (levels > 0)
     {
       dwt53_rows(data, levels);
-      transpose(data);
-      dwt53_rows(data, levels);
+    //   transpose(data);
+    //   dwt53_rows(data, levels);
     }
 
 }
@@ -267,8 +271,8 @@ static void inv_dwt53_2d(the_matrix & data, int levels)
     if (levels > 0)
     {
       idwt53_rows(data, levels);
-      transpose(data);
-      idwt53_rows(data, levels);
+    //   transpose(data);
+    //   idwt53_rows(data, levels);
     }
 
 }
@@ -297,9 +301,18 @@ static std::vector<dwt2d::LevelBlock> get_dwt_sizes(the_matrix const& a, int lev
 {
     auto x_sizes = calc_L_sizes(a[0].size(),levels);
     auto y_sizes = calc_L_sizes(a.size(),levels);
+    for (auto s : x_sizes) {
+        std::cout << s << " ";
+    }
     auto min_size = std::min( x_sizes.size(), y_sizes.size() );
+    std::cout << ",  size=" << min_size << std::endl;
     x_sizes.resize( min_size );
     y_sizes.resize( min_size );
+    for (int i = 0; i< min_size; ++i) {
+        std::cout << "(" << x_sizes[i] << ";" << y_sizes[i] << ") ";
+    }
+    std::cout << std::endl;
+
     std::vector<dwt2d::LevelBlock> result(min_size);
     //fill sizes result
     for (int i=0; i<min_size; i++)

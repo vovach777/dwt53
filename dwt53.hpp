@@ -48,8 +48,7 @@ static void dwt53(const int *x, int size, int *L, int *H)
         //C-variant
         int*H_p=H;
         const int*x_p=x+1;
-        int s=size/2;
-
+        int s=size/2;        
         while (s--) {
             *H_p++ = x_p[0] - (x_p[-1] + x_p[1])/2;
             x_p += 2;
@@ -61,13 +60,16 @@ static void dwt53(const int *x, int size, int *L, int *H)
         s = (size+1)/2-2;
         x_p=x+2;
         H_p = H;
+        if (s == 0)
+            H_p++;
+        else
         while (s--) {
             *L_p++ = x_p[0] + (H_p[0] + H_p[1] + 2) / 4;
             H_p+=1;
             x_p+=2;
         }
         //B-variant
-        *L_p++ = x_p[0]+(H_p[size>>1] + 1) /2; 
+        *L_p++ = x_p[0]+(H_p[-1] + 1) /2; 
 
     } else {
         //C-variant
@@ -106,6 +108,9 @@ static void idwt53(int *x, int size, const int *L, const int *H)
         int s = (size+1)/2-2;
         int * x_p=x+2;
         const int* H_p = H;
+        if (s == 0)
+            H_p++;
+        else
         while (s--) {
             //*L_p++ = x_p[0] + (H_p[0] + H_p[1] + 2) / 4;
             x_p[0] = *L_p++ - (H_p[0] + H_p[1] + 2) / 4;
@@ -114,7 +119,7 @@ static void idwt53(int *x, int size, const int *L, const int *H)
         }
         //B-variant
         //*L_p++ = x_p[0]+(H_p[-1] + 1) /2; 
-        x_p[0] = *L_p++ - (H_p[size>>1] + 1) /2; 
+        x_p[0] = *L_p++ - (H_p[-1] + 1) /2; 
 
         //C-variant
         H_p=H;
@@ -255,8 +260,8 @@ static void dwt53_2d(the_matrix & data, int levels)
     if (levels > 0)
     {
       dwt53_rows(data, levels);
-    //   transpose(data);
-    //   dwt53_rows(data, levels);
+      transpose(data);
+      dwt53_rows(data, levels);
     }
 
 }
@@ -268,8 +273,8 @@ static void inv_dwt53_2d(the_matrix & data, int levels)
     if (levels > 0)
     {
       idwt53_rows(data, levels);
-    //   transpose(data);
-    //   idwt53_rows(data, levels);
+      transpose(data);
+      idwt53_rows(data, levels);
     }
 
 }

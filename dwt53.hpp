@@ -1,3 +1,4 @@
+// original development is here: https://godbolt.org/z/Y9rKMPTcW
 #pragma once
 /*
   * variants *
@@ -288,82 +289,156 @@ struct Index {
 };
 
 struct Block {
+    Block() = default;
+    Block(Index x, Index y) : x(x), y(y) {
+
+    }
     Index x;
     Index y;
+    void transpose() {
+        std::swap(x,y);
+    }
+
 };
 
 struct LevelBlock {
+    Block LL_or_next_level;
     Block HL;
     Block LH;
     Block HH;
+    void transpose() {
+        LL_or_next_level.transpose();
+        HL.transpose();
+        LH.transpose();
+        HH.transpose();
+    }
+
 };
+
+enum H_type{
+    LL, HL, LH, HH
+};
+
 }
 
-static std::vector<dwt2d::LevelBlock> get_dwt_sizes(the_matrix const& a, int levels)
+static void get_dwt_sizes_rec(int &width, int &height, dwt2d::LevelBlock & lb)
 {
-    auto x_sizes = calc_L_sizes(a[0].size(),levels);
-    auto y_sizes = calc_L_sizes(a.size(),levels);
-    auto min_size = std::min( x_sizes.size(), y_sizes.size() );
-    x_sizes.resize( min_size );
-    y_sizes.resize( min_size );
-    std::vector<dwt2d::LevelBlock> result(min_size);
-    //fill sizes result
-    for (int i=0; i<min_size; i++)
-    {
-        auto & lb = result[i];
-        lb.HL.x.offs = sizeof_L(x_sizes[i]); 
-        lb.HL.x.size = sizeof_H(x_sizes[i]);
-        lb.HL.y.offs = 0;
-        lb.HL.y.size = sizeof_H(y_sizes[i]);
-     
-        lb.LH.x.offs = 0; 
-        lb.LH.x.size = sizeof_L(x_sizes[i]);
-        lb.LH.y.offs = sizeof_L(y_sizes[i]);        
-        lb.LH.y.size = sizeof_H(y_sizes[i]);
+    const auto L_width = sizeof_L(width);
+    const auto H_width = sizeof_H(width);
+    const auto L_height = sizeof_L(height);
+    const auto H_height = sizeof_H(height);
+    lb.LL_or_next_level.x.offs = 0;
+    lb.LL_or_next_level.y.offs = 0;
+    lb.LL_or_next_level.x.size = L_width;
+    lb.LL_or_next_level.y.size = L_height;
 
-        lb.HH.x.offs = sizeof_L(x_sizes[i]); 
-        lb.HH.x.size = sizeof_H(x_sizes[i]);
-        lb.HH.y.offs = sizeof_L(y_sizes[i]);        
-        lb.HH.y.size = sizeof_H(y_sizes[i]);
-    }
-    return result;
+    lb.HL.x.offs = L_width; 
+    lb.HL.x.size = H_width;
+    lb.HL.y.offs = 0;        
+    lb.HL.y.size = L_height;
+
+    lb.LH.x.offs = 0; 
+    lb.LH.x.size = L_width;
+    lb.LH.y.offs = L_height;        
+    lb.LH.y.size = H_height;
+
+    lb.HH.x.offs = L_width; 
+    lb.HH.x.size = H_width;
+    lb.HH.y.offs = L_height;        
+    lb.HH.y.size = H_height;
+
+    width = L_width;
+    height = L_height;
+        
 }
 
-static void scalar_quant_example(the_matrix & a, int levels, int Q) 
-{  
-    // int height = a.size();
-    // int width =  a[0].size();
-    // std::cout << "scalar_quant size:" << height << "x" << width << std::endl;
-    auto sizes = get_dwt_sizes(a,levels);
-    for (auto const & si : sizes)
-    {
-        if (Q < 1)
-            Q = 1;
-        // std::cout << "HL:" << "x=" << si.HL.x.offs << ":" << si.HL.x.size <<  "  y=" << si.HL.y.offs << ":" << si.HL.y.size << std::endl;
-        // std::cout << "LH:" << "x=" << si.LH.x.offs << ":" << si.LH.x.size <<  "  y=" << si.LH.y.offs << ":" << si.LH.y.size << std::endl;
-        // std::cout << "HH:" << "x=" << si.HH.x.offs << ":" << si.HH.x.size <<  "  y=" << si.HH.y.offs << ":" << si.HH.y.size << std::endl;
-        // std::cout << "----" << std::endl;
-        for (int y=0; y < si.HH.y.size; ++y)
-        for (int x=0; x < si.HH.x.size; ++x)
-        {
-            auto & coof_hh = a[x + si.HH.x.offs][y + si.HH.y.offs];            
-            coof_hh = ((coof_hh + (Q)) / (Q*2)) * (Q*2);
-        }
-        for (int y=0; y < si.HL.y.size; ++y)
-        for (int x=0; x < si.HL.x.size; ++x)
-        {
-            auto & coof_hl = a[x + si.HL.x.offs][y + si.HL.y.offs];            
-            coof_hl = ((coof_hl + (Q/2)) / Q) * Q;
-        }
-        for (int y=0; y < si.LH.y.size; ++y)
-        for (int x=0; x < si.LH.x.size; ++x)
-        {
-            auto & coof_lh = a[x + si.LH.x.offs][y + si.LH.y.offs];            
-            coof_lh = ((coof_lh + (Q/2)) / Q) * Q;
-        }
-        Q /= 2;
-  
-    }
+static std::vector<dwt2d::LevelBlock> get_dwt_sizes(int width, int height, int levels, bool is_transposed )
+{
+
+    if ( is_transposed ) 
+        std::swap(width, height);
+
+    std::vector<dwt2d::LevelBlock> result;
+
+    while (levels-- && width > 1 && height > 1) {
+       
+        auto & lb =  result.emplace_back();
+        get_dwt_sizes_rec(width, height, lb  );
+        if (is_transposed)
+            lb.transpose();
+   }
+   return result;
 }
+
+
+template <typename F>
+static void process_levels(the_matrix & a, int levels, bool is_transposed, F f)
+{
+    int width = a[0].size();
+    int height = a.size();
+
+    if ( is_transposed) 
+        std::swap(width, height);
+
+    dwt2d::LevelBlock lb;
+    //int actual_levels = 0;
+    for (int level=1; level<=levels && width > 1 && height > 1; ++level)
+    {
+        get_dwt_sizes_rec(width, height, lb);
+        if (is_transposed)
+            lb.transpose();
+        f(level, dwt2d::HL, lb.HL);
+        f(level, dwt2d::LH, lb.LH);
+        f(level, dwt2d::HH, lb.HH);
+        //actual_levels++;
+    }
+    
+}
+
+
+void compress_data(the_matrix & data, int levels=5, int Q=16, int details_level=2)
+{
+    dwt53_2d(data,levels); 
+    //make sure dwt is transposed (for speed optimization reasons)
+    process_levels(data,levels, true, [&data, Q,details_level](int level, dwt2d::H_type type, dwt2d::Block const& lb ){
+        int q = Q >> ((level-1)*details_level); 
+        if (type == dwt2d::HH)
+            q<<=1;
+        if (q <= 1)
+            return;
+        for (int y = lb.y.offs; y < lb.y.offs + lb.y.size; ++y)
+        for (int x = lb.x.offs; x < lb.x.offs + lb.x.size; ++x)
+        {
+         
+           data[y][x] = (( data[y][x] + q/2) / q);
+        }
+        //std::cerr << q << std::endl;
+
+  });  
+}
+
+void decompress_data(the_matrix & data, int levels=5, int Q=16, int details_level=2)
+{
+    
+    //make sure dwt is transposed (for speed optimization reasons)
+    process_levels(data,levels, true, [&data, Q,details_level](int level, dwt2d::H_type type, dwt2d::Block const& lb ){
+        int q = Q >> ((level-1)*details_level); 
+        if (type == dwt2d::HH)
+            q<<=1;
+        if (q <= 1)
+            return;
+        for (int y = lb.y.offs; y < lb.y.offs + lb.y.size; ++y)
+        for (int x = lb.x.offs; x < lb.x.offs + lb.x.size; ++x)
+        {
+         
+           data[y][x] = data[y][x] *q;
+        }
+        //std::cerr << q << std::endl;
+
+  });  
+  inv_dwt53_2d(data,levels);
+}
+
+
 #endif
 #endif

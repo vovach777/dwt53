@@ -1,4 +1,4 @@
-// original development is here: https://godbolt.org/z/rd8xda6vn
+// original development is here: https://godbolt.org/z/6x3b7v1Tc
 #pragma once
 /*
   * variants *
@@ -396,16 +396,29 @@ static void process_levels(the_matrix & a, int levels, bool is_transposed, F f)
 }
 
 
+/**
+ * Compresses the input data using the discrete wavelet transform (DWT) and quantization.
+ * @param data The input matrix to be compressed. This matrix will be modified in-place.
+ * @param levels The number of levels of the DWT to perform (optional, default is 5).
+ * @param Q The quantization factor to control the amount of compression (optional, default is 16).
+ * @param details_level The level at which the quantization factor changes (optional, default is 2).
+ */
 static void compress_data(the_matrix & data, int levels=5, int Q=16, int details_level=2)
 {
+    // Perform the DWT on the input data
     dwt53_2d(data,levels); 
     //make sure dwt is transposed (for speed optimization reasons)
+
+    // Process each level of the DWT
     process_levels(data,levels, true, [&data, Q,details_level](int level, dwt2d::H_type type, dwt2d::Block const& lb ){
+        // Calculate the quantization factor for the current level and subband type
         int q = Q >> ((level-1)*details_level); 
         if (type == dwt2d::HH)
             q<<=1;
         if (q <= 1)
             return;
+
+        // Apply quantization to the wavelet coefficients
         for (int y = lb.y.offs; y < lb.y.offs + lb.y.size; ++y)
         for (int x = lb.x.offs; x < lb.x.offs + lb.x.size; ++x)
         {

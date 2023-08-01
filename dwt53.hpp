@@ -168,6 +168,7 @@ static void idwt53(int *x, int size, const int *L, const int *H)
 
 #ifdef __cplusplus
 #ifdef THE_MATRIX_DEFINED
+#include <algorithm>
 #include <vector>
 
 

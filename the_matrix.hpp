@@ -21,7 +21,111 @@ static std::ostream& operator << (std::ostream& o,  the_matrix const & a)
     }
     o << std::endl;
     return o;
+
+
 }
+
+
+static inline void setValue( the_matrix& matrix, int row, int col, int value) {
+    int height = matrix.size();
+    int width = matrix[0].size();
+
+
+    if (row >= 0 && row < height && col >= 0 && col < width)
+        matrix[row][col] = value;
+}
+
+
+static void drawLine(the_matrix& matrix, int x1, int y1, int x2, int y2, int value = 1) {
+    int width = matrix[0].size();
+    int height = matrix.size();
+
+    int dx = x2-x1;
+    int dy = y2-y1;
+    double m = double(dy)/dx;
+    double xin,yin;
+    int tot;
+    if(dx==0)
+    {
+        if(y1>y2) std::swap(y1,y2);
+        for(int i=y1;i<=y2;i++) setValue(matrix,i,x1,value);
+        return ;
+    }
+    else if(dy==0)
+    {
+        if(x1>x2) std::swap(x1,x2);
+        for(int i=x1;i<=x2;i++) setValue(matrix,y1,i,value);
+        return ;
+    }
+
+    if(abs(dx)>=abs(dy))
+    {
+        if(x1>x2)
+        {
+            std::swap(x1,x2);
+            std::swap(y1,y2);
+        }
+        xin = 1;
+        yin = m;
+        tot = x2-x1+1;
+    }
+    else
+    {
+        if(y1>y2)
+        {
+            std::swap(x1,x2);
+            std::swap(y1,y2);
+        }
+        yin = 1;
+        xin = 1.0/m;
+        tot = y2-y1 + 1;
+
+    }
+    double x = x1;
+    double y = y1;
+    for(int i=1;i<=tot;i++)
+    {
+        setValue(matrix,round(y),round(x),value);
+        x += xin;
+        y += yin;
+    }
+
+}
+
+
+static inline int getValue(const the_matrix& matrix, int row, int col) {
+    int height = matrix.size();
+    int width = matrix[0].size();
+
+    // Удерживаем координаты в границах матрицы
+    row = std::max(0, std::min(height - 1, row));
+    col = std::max(0, std::min(width - 1, col));
+
+    return matrix[row][col];
+}
+
+static void cubicBlur3x3(the_matrix& matrix) {
+    int height = matrix.size();
+    int width = matrix[0].size();
+
+
+    // Копирование исходной матрицы для сохранения оригинальных значений
+    the_matrix originalMatrix = matrix;
+
+    // Применение кубического размытия
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int sum = 0;
+            for (int yy = y-1; yy <= y+1; yy++) {
+                for (int xx = x-1; xx <= x+1; xx++) {
+                    sum += getValue(originalMatrix, yy, xx);
+                }
+            }
+            matrix[y][x] = (sum+5) / 9;
+        }
+    }
+}
+
 
 static the_matrix make_radial(int size) {
    the_matrix data(size,std::vector<int>(size));
@@ -159,6 +263,18 @@ static the_matrix make_sin2d(int width, int height, double freq, int time) {
 }
 
 
+static the_matrix make_envelope(int width, int height, int value)
+{
+    the_matrix result(height, std::vector<int>(width, 0));
+    drawLine(result, 0, 0, width-1, 0, value);
+    drawLine(result, width-1, 0, width-1, height-1, value);
+    drawLine(result, width-1, height-1, 0, height-1, value);
+    drawLine(result, 0, height-1, 0, 0, value);
+    drawLine(result, 0, 0, width-1, height-1, value);
+    drawLine(result, 0, height-1, width-1, 0, value);
+    return result;
+}
+
 
 static int psnr(const the_matrix & originalImage, const the_matrix& compressedImage)
 {
@@ -167,7 +283,7 @@ static int psnr(const the_matrix & originalImage, const the_matrix& compressedIm
     auto count = 0ULL;
     int maxPixelValue = 0;
     for (int y=0,max_y=std::min(originalImage.size(), compressedImage.size()); y<max_y; y++)
-    for (int x=0,max_x=std::min(originalImage.size(), compressedImage.size()); x<max_x; x++)
+    for (int x=0,max_x=std::min(originalImage[y].size(), compressedImage[y].size()); x<max_x; x++)
     {
         auto diff = originalImage[y][x] - compressedImage[y][x];
         mse += diff * diff;

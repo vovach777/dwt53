@@ -8,23 +8,6 @@
 #include <algorithm>
 #include "dwt53.hpp"
 
-
-
-
-void test(const int *x, int size, int *L, int *H);
-using test_t = decltype(test)*;
-
-class Example {
- 
-    test_t var = &test;
-
-    public:
-    void set_transform() {
-  
-            var = &test;
-     
-    }
-};
 int main() {
 
     int details = 8;

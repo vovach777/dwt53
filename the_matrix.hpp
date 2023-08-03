@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <ostream>
 #include <iomanip>
+#include <cassert>
 
 using the_matrix = std::vector<std::vector<int>>;
 
@@ -23,6 +24,47 @@ static std::ostream& operator << (std::ostream& o,  the_matrix const & a)
     return o;
 
 
+}
+
+
+static void transpose(the_matrix& matrix) {
+    const auto rows = matrix.size();
+    const auto cols = matrix[0].size();
+
+    if (rows != cols) {
+        // Матрица не квадратная, выполняем перемещение
+        the_matrix transposed(cols, std::vector<int>(rows));
+
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                transposed[j][i] = matrix[i][j];
+            }
+        }
+
+        std::swap(matrix,transposed);
+    } else {
+        // Матрица квадратная, выполняем обмен элементами
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < i; ++j) {
+                std::swap(matrix[i][j], matrix[j][i]);
+            }
+        }
+    }
+}
+
+std::vector<int> get_col(the_matrix const &matrix, int x) {
+    std::vector<int> col(matrix.size());
+    for (int i=0; i< col.size(); i++ )
+        col[i] = matrix[i][x];
+    return col;
+}
+
+void set_col(the_matrix  &matrix, int x,  std::vector<int> const & col) {
+    assert( col.size() == matrix.size() );
+    
+    for (int i=0; i< col.size(); i++ )
+        matrix[i][x] = col[i];
+    
 }
 
 

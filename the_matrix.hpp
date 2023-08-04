@@ -9,16 +9,97 @@
 #include <iomanip>
 #include <cassert>
 
+
+struct Index {
+    int offs;
+    int size;
+};
+
+struct Block {
+    Index x;
+    Index y;
+};
+
+
 using the_matrix = std::vector<std::vector<int>>;
+static bool raster_flag = false;
+
+static int make_positive(the_matrix & a);
+static inline int getValue(const the_matrix& matrix, int row, int col);
+
+
+static the_matrix const & raster(the_matrix const& img) {
+    raster_flag = true;
+    return img;
+}
+
+struct Range {
+    int min;
+    int max;
+};
+
+Range get_range(the_matrix const &matrix)
+{
+    int minVal = std::numeric_limits<int>::max();
+    int maxVal = std::numeric_limits<int>::min();
+
+    for (const auto& row : matrix) {
+        for (const auto val : row) {
+            minVal = std::min(minVal, val);
+            maxVal = std::max(maxVal, val);
+        }
+    }
+    return Range{minVal,maxVal};
+}
+
+
+Range get_range(the_matrix const &matrix, Block const& block)
+{
+    int minVal = std::numeric_limits<int>::max();
+    int maxVal = std::numeric_limits<int>::min();
+    
+    for (int j=0; j < block.y.size; j++)
+    for (int i=0; i < block.x.size; i++)
+    {
+        auto val = getValue(matrix, block.x.offs + i, block.y.offs + j);
+        minVal = std::min(minVal, val);
+        maxVal = std::max(maxVal, val);        
+    }
+    return Range{minVal,maxVal};
+}
+
+
+void raster(std::ostream& o,the_matrix const& img)
+{
+    static char pixels[] = {' ', '-', '+' ,'=','#','@'};
+    auto range = get_range(img);
+    
+
+      for (const auto & row : img) {
+      for (const auto v : row)
+      {
+         auto pixel = pixels[ std::clamp<int>(  (v - range.min) * sizeof(pixels) / (range.max - range.min),0,sizeof(pixels)-1) ];
+         o <<  pixel << pixel << pixel ;
+      }
+        o <<std::endl;
+      }
+}
+
 
 static std::ostream& operator << (std::ostream& o,  the_matrix const & a)
 {
-    o << std::endl;
-    for (auto & row : a)
-    {
-        for (auto v : row)
-            o << std::setw(3) << v << " ";
-        o << std::endl;
+     o << std::endl;
+    if (raster_flag) {
+        raster_flag = false;
+        raster(o, a);
+    }
+    else {
+        for (auto & row : a)
+        {
+            for (auto v : row)
+                o << std::setw(3) << v << " ";
+            o << std::endl;
+        }
     }
     o << std::endl;
     return o;
@@ -346,5 +427,39 @@ static int psnr(const the_matrix & originalImage, const the_matrix& compressedIm
 
     return psnr;
 }
+
+template<typename F>
+inline auto process_point(int x, int y, int &value, F f) -> decltype(f(value),void())
+{
+   f(value);
+}
+
+template<typename F>
+inline auto process_point(int x, int y, int &value, F f) -> decltype(f(x,y,value), void())
+{
+   f(x,y,value);
+}
+
+template <typename F>
+void process_matrix(the_matrix & matrix, F f)
+{    
+    for (int y=0; y<matrix.size();y++)
+    for (int x=0; x<matrix[y].size();x++)
+        process_point(x,y,matrix[y][x],f);    
+}
+
+
+template <typename F>
+void process_matrix(the_matrix &matrix, Block const& block, F f)
+{
+    for (int j=0; j < block.y.size; j++)
+    for (int i=0; i < block.x.size; i++)
+    {
+        int x = block.x.offs+i;
+        int y = block.y.offs+j;
+        process_point(x,y,matrix.at(y).at(x),f);    
+    }
+}
+
 
 #endif

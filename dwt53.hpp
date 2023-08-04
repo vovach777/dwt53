@@ -1,4 +1,3 @@
-// original development is here: https://godbolt.org/z/hMhMYfbTY
 #pragma once
 /*
   * variants *
@@ -216,20 +215,6 @@ using  IDWTFunction = decltype(idwt53)*;
 
 enum Transforms {
     unchanged, haar, dwt53
-};
-
-struct Index {
-    int offs;
-    int size;
-};
-
-struct Block {
-    Block() = default;
-    Block(Index x, Index y) : x(x), y(y) {
-
-    }
-    Index x;
-    Index y;
 };
 
 enum BlockType{

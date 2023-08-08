@@ -55,11 +55,11 @@ int main() {
     double Q =
         0.0;  // 0.4 - psnr=27;  0.2 - psnr=36;  0.1 - psnr=50, 0 - lossless
     dwt2d::Wavelet wavelet = dwt2d::dwt53;
-    //auto data = make_envelope(32,32,3);
+    auto data = make_envelope(32,32,1);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
     //auto data = make_gradient(32,32,0,11,11,22);
-    auto data = lenna;
+    //auto data = lenna;
     //auto data = make_sky(32,32);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);

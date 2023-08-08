@@ -21,14 +21,21 @@ class Codebook {
 
         auto maxIt = std::max_element(begin, end);
         *maxIt = -*maxIt;
+        if (*maxIt == 0)
+            return;
+  
+     
         auto clear_left = maxIt == begin ? end : maxIt - 1;
         auto clear_right = maxIt + 1;
 
-        auto dynamic_bin = std::max<int>(1, std::distance(zero_coefficient, maxIt) / 4);
+        auto dynamic_bin = std::max<int>(1, std::distance(zero_coefficient, maxIt)/ 4);
 
         for (int i = 1; i < dynamic_bin; i++) {
             if (clear_left != end) {
+                //if (std::distance(zero_coefficient,clear_left) >= 4)
                 *clear_left = 0;
+                // else
+                //   *clear_left -= *clear_left;//preserve ditails
                 if (clear_left == begin)
                     clear_left = end;
                 else
@@ -46,7 +53,7 @@ class Codebook {
 
     void create_codeword_index() {
         value_to_cw.clear();
-        for (int i = 0; i < codebook.back(); i++) {
+        for (int i = 0; i <= codebook.back(); i++) {
             value_to_cw.push_back(std::distance(
                 codebook.begin(),
 
@@ -63,7 +70,12 @@ class Codebook {
 
     Codebook(std::vector<int> hist) {
         //std::cerr << "histogram=" << hist;
-
+     
+        // for (auto f4=hist.begin(); f4 != hist.begin() + std::min<int>(5,hist.size()); ++f4)
+        // {
+        //       if (*f4 > 0)
+        //       *f4 = -*f4;
+        // }
         process_range(hist.begin(), hist.end(), hist.begin());
 
         for (int i = 0; i < hist.size(); ++i) {
@@ -79,7 +91,7 @@ class Codebook {
     }
 
     Codebook(int max_value, int step = 5, int expa = 16) {
-        for (auto x = 0, v = 0, progress = 0; x <= max_value && v < max_value; x++) {
+        for (auto x = 0, v = 0, progress = 0; x <= max_value && v <= max_value; x++) {
             codebook.push_back(v);
             v += progress / expa + 1;
             progress = progress + step;

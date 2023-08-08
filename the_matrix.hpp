@@ -28,17 +28,29 @@ static int make_positive(the_matrix & a);
 static inline int getValue(const the_matrix& matrix, int row, int col);
 
 
-static the_matrix const & raster(the_matrix const& img) {
+template <typename MatrixType>
+decltype(auto) raster(MatrixType && img) {
     raster_flag = true;
-    return img;
+    return std::forward<MatrixType>(img);
 }
+
 
 struct Range {
     int min;
     int max;
 };
 
-Range get_range(the_matrix const &matrix)
+inline Block make_block(the_matrix const & matrix){
+    //return Block{{0,matrix[0].size()}, {0,matrix.size()}};
+    Block result;
+    result.x.offs = 0;
+    result.x.size = matrix[0].size();
+    result.y.offs = 0;
+    result.y.size = matrix.size();
+    return result;
+}
+
+inline Range get_range(the_matrix const &matrix)
 {
     int minVal = std::numeric_limits<int>::max();
     int maxVal = std::numeric_limits<int>::min();
@@ -53,7 +65,7 @@ Range get_range(the_matrix const &matrix)
 }
 
 
-Range get_range(the_matrix const &matrix, Block const& block)
+inline Range get_range(the_matrix const &matrix, Block const& block)
 {
     int minVal = std::numeric_limits<int>::max();
     int maxVal = std::numeric_limits<int>::min();
@@ -69,16 +81,16 @@ Range get_range(the_matrix const &matrix, Block const& block)
 }
 
 
-void raster(std::ostream& o,the_matrix const& img)
+inline void raster(std::ostream& o,the_matrix const& img)
 {
-    static char pixels[] = {' ', '-', '+' ,'=','#','@'};
+    static char pixels[] = {' ', ':', ';' ,'x','X','@'};
     auto range = get_range(img);
     
 
       for (const auto & row : img) {
       for (const auto v : row)
       {
-         auto pixel = pixels[ std::clamp<int>(  (v - range.min) * sizeof(pixels) / (range.max - range.min),0,sizeof(pixels)-1) ];
+         auto pixel = (range.max - range.min == 0) ? pixels[0] : pixels[ std::clamp<int>(  (v - range.min) * sizeof(pixels) / (range.max - range.min),0,sizeof(pixels)-1) ];
          o <<  pixel << pixel << pixel ;
       }
         o <<std::endl;
@@ -86,7 +98,22 @@ void raster(std::ostream& o,the_matrix const& img)
 }
 
 
-static std::ostream& operator << (std::ostream& o,  the_matrix const & a)
+inline std::ostream& raster(std::ostream& os) {
+    raster_flag = true;
+    return os;
+}
+
+
+inline std::ostream& operator << (std::ostream& o,  std::vector<int> const & a)
+{   
+    for (auto v : a)
+        o << std::setw(3) << v << " ";
+    o << std::endl;
+    return o;
+}
+
+
+inline std::ostream& operator << (std::ostream& o,  the_matrix const & a)
 {
      o << std::endl;
     if (raster_flag) {
@@ -94,21 +121,18 @@ static std::ostream& operator << (std::ostream& o,  the_matrix const & a)
         raster(o, a);
     }
     else {
-        for (auto & row : a)
+        for (auto const & row : a)
         {
-            for (auto v : row)
-                o << std::setw(3) << v << " ";
-            o << std::endl;
+            o << row;
         }
     }
     o << std::endl;
     return o;
-
-
 }
 
 
-static void transpose(the_matrix& matrix) {
+
+inline void transpose(the_matrix& matrix) {
     const auto rows = matrix.size();
     const auto cols = matrix[0].size();
 
@@ -133,14 +157,14 @@ static void transpose(the_matrix& matrix) {
     }
 }
 
-std::vector<int> get_col(the_matrix const &matrix, int x) {
+inline std::vector<int> get_col(the_matrix const &matrix, int x) {
     std::vector<int> col(matrix.size());
     for (int i=0; i< col.size(); i++ )
         col[i] = matrix[i][x];
     return col;
 }
 
-void set_col(the_matrix  &matrix, int x,  std::vector<int> const & col) {
+inline void set_col(the_matrix  &matrix, int x,  std::vector<int> const & col) {
     assert( col.size() == matrix.size() );
     
     for (int i=0; i< col.size(); i++ )
@@ -149,7 +173,7 @@ void set_col(the_matrix  &matrix, int x,  std::vector<int> const & col) {
 }
 
 
-static inline void setValue( the_matrix& matrix, int row, int col, int value) {
+inline void setValue( the_matrix& matrix, int row, int col, int value) {
     int height = matrix.size();
     int width = matrix[0].size();
 
@@ -159,7 +183,7 @@ static inline void setValue( the_matrix& matrix, int row, int col, int value) {
 }
 
 
-static void drawLine(the_matrix& matrix, int x1, int y1, int x2, int y2, int value = 1) {
+inline void drawLine(the_matrix& matrix, int x1, int y1, int x2, int y2, int value = 1) {
     int width = matrix[0].size();
     int height = matrix.size();
 
@@ -216,7 +240,7 @@ static void drawLine(the_matrix& matrix, int x1, int y1, int x2, int y2, int val
 }
 
 
-static inline int getValue(const the_matrix& matrix, int row, int col) {
+inline int getValue(const the_matrix& matrix, int row, int col) {
     int height = matrix.size();
     int width = matrix[0].size();
 
@@ -227,7 +251,7 @@ static inline int getValue(const the_matrix& matrix, int row, int col) {
     return matrix[row][col];
 }
 
-static void cubicBlur3x3(the_matrix& matrix) {
+inline void cubicBlur3x3(the_matrix& matrix) {
     int height = matrix.size();
     int width = matrix[0].size();
 
@@ -250,7 +274,7 @@ static void cubicBlur3x3(the_matrix& matrix) {
 }
 
 
-static the_matrix make_radial(int size) {
+inline the_matrix make_radial(int size) {
    the_matrix data(size,std::vector<int>(size));
   for (int y=0; y<size; y++)
   for (int x=0; x<size; x++)
@@ -266,7 +290,7 @@ static the_matrix make_radial(int size) {
 }
 
 
-static the_matrix make_random(int size) {
+inline the_matrix make_random(int size) {
     the_matrix data(size,std::vector<int>(size));
     for (int y=0; y<size; y++)
     for (int x=0; x<size; x++)
@@ -278,12 +302,12 @@ static the_matrix make_random(int size) {
     return data;
 }
 
-static the_matrix make_monotonic(int size, int value)
+inline the_matrix make_monotonic(int size, int value)
 {
     return the_matrix(size, std::vector<int>(size,value));
 }
 
-static the_matrix make_gradient(int size) {
+inline the_matrix make_gradient(int size) {
    the_matrix data(size,std::vector<int>(size));
   for (int y=0; y<size; y++)
   for (int x=0; x<size; x++)
@@ -295,7 +319,7 @@ static the_matrix make_gradient(int size) {
 }
 
 
-static std::vector<double> make_sin(int N, int freq = 1, double phase_in_T=0) {
+inline std::vector<double> make_sin(int N, int freq = 1, double phase_in_T=0) {
 
     std::vector<double> vec;
 
@@ -305,25 +329,8 @@ static std::vector<double> make_sin(int N, int freq = 1, double phase_in_T=0) {
     return vec;
 }
 
-static auto matrix_energy(const the_matrix& m)
-{
-   auto elements_num = m.size()*m[0].size();
-   decltype(elements_num) result = 0;
-    if ( elements_num > 0)
-    {
-      for (const auto& row : m)
-      for (const auto& v  : row)
-      {
-         const auto energy = abs(v)*2;
-         result += energy;
-      }
-      result = result * 1000 / elements_num;
-    }
-    return result;
-}
 
-
-static double interpolate(
+inline double interpolate(
     const double bottomLeft,
     const double topLeft,
     const double bottomRight,
@@ -338,7 +345,7 @@ static double interpolate(
         topRight   * dx * dy;
 }
 
-static the_matrix make_gradient(int width, int height, int topLeft, int topRight, int bottomLeft, int bottomRight) {
+inline the_matrix make_gradient(int width, int height, int topLeft, int topRight, int bottomLeft, int bottomRight) {
     the_matrix a( height, std::vector<int>(width,0));
 
     for (int y = 0; y < height; ++y) {
@@ -352,7 +359,7 @@ static the_matrix make_gradient(int width, int height, int topLeft, int topRight
 }
 
 
-static int make_positive(the_matrix & a)
+inline int make_positive(the_matrix & a)
 {
     int min = 0;
     for (const auto & row: a)
@@ -366,7 +373,7 @@ static int make_positive(the_matrix & a)
     return min;
 }
 
-static the_matrix make_sin2d(int width, int height, double freq, int time) {
+inline the_matrix make_sin2d(int width, int height, double freq, int time) {
     the_matrix gradient = the_matrix(height, std::vector<int>(width,0));
     double freq_x = freq + sin(time/16.0);
     double freq_y = freq_x / 2;
@@ -386,7 +393,7 @@ static the_matrix make_sin2d(int width, int height, double freq, int time) {
 }
 
 
-static the_matrix make_envelope(int width, int height, int value)
+inline the_matrix make_envelope(int width, int height, int value)
 {
     the_matrix result(height, std::vector<int>(width, 0));
     drawLine(result, 0, 0, width-1, 0, value);
@@ -399,49 +406,48 @@ static the_matrix make_envelope(int width, int height, int value)
 }
 
 
-static int psnr(const the_matrix & originalImage, const the_matrix& compressedImage)
+inline int psnr(const the_matrix & originalImage, const the_matrix& compressedImage)
 {
     // Расчет суммы квадратов разностей пикселей
     auto mse = 0ULL;
-    auto count = 0ULL;
-    int maxPixelValue = 0;
+    auto originalRange = get_range(originalImage);
+    int count = originalImage.size() * originalImage[0].size();
+    if (count == 0)
+        return 0;
     for (int y=0,max_y=std::min(originalImage.size(), compressedImage.size()); y<max_y; y++)
     for (int x=0,max_x=std::min(originalImage[y].size(), compressedImage[y].size()); x<max_x; x++)
     {
-        auto diff = originalImage[y][x] - compressedImage[y][x];
+        auto diff = originalImage[y][x]+originalRange.min - (compressedImage[y][x] + originalRange.min);
         mse += diff * diff;
-        count++;
-        maxPixelValue = std::max(maxPixelValue, abs(originalImage[y][x]) );
-        maxPixelValue = std::max(maxPixelValue, abs(compressedImage[y][x]) );
     }
-    if (count == 0)
-        return 0;
-    // Расчет среднеквадратичной ошибки (MSE)
 
+    // Расчет среднеквадратичной ошибки (MSE)
 
     if (mse == 0)
         return 100;
 
     // Расчет PSNR
+    int maxPixelValue = originalRange.min+originalRange.max;
     int psnr =  round ( 10.0 * log10((double)(maxPixelValue * maxPixelValue)*count / mse) );
 
     return psnr;
 }
 
-template<typename F>
-inline auto process_point(int x, int y, int &value, F f) -> decltype(f(value),void())
+
+template<typename F, typename T>
+inline auto process_point(int x, int y, T &&value, F f) -> decltype(f(value),void())
 {
    f(value);
 }
 
-template<typename F>
-inline auto process_point(int x, int y, int &value, F f) -> decltype(f(x,y,value), void())
+template<typename F, typename T>
+inline auto process_point(int x, int y, T &&value, F f) -> decltype(f(x,y,value), void())
 {
    f(x,y,value);
 }
 
-template <typename F>
-void process_matrix(the_matrix & matrix, F f)
+template <typename F, typename the_matrix>
+auto process_matrix(the_matrix && matrix, F f) -> decltype( matrix[0].size(), matrix.size(), matrix[0][0], void())
 {    
     for (int y=0; y<matrix.size();y++)
     for (int x=0; x<matrix[y].size();x++)
@@ -449,8 +455,8 @@ void process_matrix(the_matrix & matrix, F f)
 }
 
 
-template <typename F>
-void process_matrix(the_matrix &matrix, Block const& block, F f)
+template <typename F, typename the_matrix>
+auto process_matrix(the_matrix &&matrix, Block const& block, F f) -> decltype( matrix[0].size(), matrix.size(), matrix.at(0).at(0), void())
 {
     for (int j=0; j < block.y.size; j++)
     for (int i=0; i < block.x.size; i++)
@@ -459,6 +465,62 @@ void process_matrix(the_matrix &matrix, Block const& block, F f)
         int y = block.y.offs+j;
         process_point(x,y,matrix.at(y).at(x),f);    
     }
+}
+
+template <typename F>
+inline the_matrix make_matrix(int width, int height, F f)
+{
+    the_matrix matrix(height, std::vector<int>(width,0));
+    process_matrix(matrix, f);
+    return matrix;
+}
+
+inline the_matrix make_sky(int width, int height) {
+    auto result = make_matrix(width, height,
+     [sz=width*height](int x, int y, int &v){
+        
+          if (rand() % 4 == 0)
+             v = 255;
+         else
+            v =  y + x/4;
+            
+
+     } );
+     cubicBlur3x3(result);
+     cubicBlur3x3(result);
+     return result;
+}
+
+namespace inline_the_matrix {
+inline int ilog2_32(uint32_t v)
+{
+   if (v == 0)
+      return 1;
+   return 32-__builtin_clz(v);
+}
+}
+
+
+template <typename the_matrix>
+int bitSize(the_matrix && matrix) {
+    int bitcount = 0;
+    auto range = get_range(matrix);
+        
+    process_matrix( std::forward<the_matrix>(matrix), [&](int v){        
+            
+            if ( range.min >= 0)
+                bitcount += inline_the_matrix::ilog2_32(v);//unsigned bitsize
+            else
+                bitcount += inline_the_matrix::ilog2_32(v)+1;//signed bitsize
+    });
+    
+    return bitcount;
+}
+
+template <typename the_matrix>
+int matrix_energy(the_matrix&& m)
+{
+    return bitSize(std::forward<the_matrix>(m)) / 8;
 }
 
 

@@ -1,12 +1,16 @@
-//this is snapshot of project here: https://godbolt.org/z/8f9fMGTKq
-#include "the_matrix.hpp"
-#include <iostream>
-#include <vector>
+// this is snapshot of project here: https://godbolt.org/z/8f9fMGTKq
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <iomanip>
-#include <algorithm>
+#include <iostream>
+#include <vector>
+
 #include "dwt53.hpp"
+#include "the_matrix.hpp"
+
+#include "utils.hpp"
+#include "huffmanpack.hpp"
 
 the_matrix lenna = {
     {158, 153, 168, 146, 95, 105, 110, 124, 129, 130, 132, 133, 132, 131, 131, 131, 129, 128, 129, 113, 128, 160, 157, 155, 148, 196, 166, 109, 125, 122, 131, 93, },
@@ -44,44 +48,74 @@ the_matrix lenna = {
 };
  
 
+#if 1
 int main() {
-
-    int details = 8;
-    int max_levels = 1;
-    int Q = 22; //not working for now
- 
-    //auto data = make_envelope(32,32,44);
-    //cubicBlur3x3(data);
-    //cubicBlur3x3(data);
+    int details = 3;
+    int max_levels = 5;
+    double Q =
+        0.0;  // 0.4 - psnr=27;  0.2 - psnr=36;  0.1 - psnr=50, 0 - lossless
+    dwt2d::Wavelet wavelet = dwt2d::dwt53;
+    //auto data = make_envelope(32,32,3);
+    // cubicBlur3x3(data);
+    // cubicBlur3x3(data);
     //auto data = make_gradient(32,32,0,11,11,22);
     auto data = lenna;
+    //auto data = make_sky(32,32);
+    // cubicBlur3x3(data);
+    // cubicBlur3x3(data);
+
+    std::cout << "original: pw=" << matrix_energy(data) << raster(data);
+    auto data_comp = huffman::compress(data);
+    std::cout << "packed by huffman size = " << data_comp.size() << std::endl;
+
+    // auto test = make_matrix(10,10, [](int x,int y,int&v){ v = x + y*10; });
+    //  auto all_img = make_block( data );
+    //   quantization_block(data,all_img, true);
+    //   quantization_block(data,all_img, false);
+    //  std::cout << "quantized:" << raster(data);
+    //  std::cout << "psnr=" << psnr(lenna, data) << std::endl;
+
+    dwt2d::Transform codec;
+    codec.prepare_transform(max_levels, wavelet, data);
+    auto& haar_data = codec.forward();
+
+    // std::cout << raster(haar_data);
+    std::cout << "transformed: pw=" << matrix_energy(haar_data) << haar_data;
+
+
+    auto haar_data_comp = huffman::compress(haar_data);
+    std::cout << "packed by huffman size = " << haar_data_comp.size() << std::endl;
     
+    codec.vq_forward();
+    std::cout << "quantized: pw=" << matrix_energy(haar_data) << haar_data;
 
-    std::cout << "original:" << raster(data) << data;
-    
 
-    auto haar_data = dwt2d::compress_data(data, dwt2d::dwt53, max_levels); 
-    std::cout << raster(haar_data);
-    
-    dwt2d::process_levels(haar_data, max_levels, [&haar_data](dwt2d::Band const & band ) {
+    auto haar_data_vq_comp = huffman::compress(haar_data);
+    std::cout << "packed by huffman size = " << haar_data_vq_comp.size() << std::endl;
 
-        // process_matrix(haar_data, band.blocks[0], [](int& v) { v = 0;} );
-        // process_matrix(haar_data, band.blocks[1], [](int& v) { v = 0;} );
-        for (int i = 0; i < 3; i++) {
-            auto range = get_range(haar_data, band.blocks[i]);
-            auto threshold = round( sqrt( abs(range.min) * abs(range.max) ) * 0.5) - 2;
-            //std::cerr << "range=" << range.min << "-" << range.max << std::endl;
-            std::cerr << "threshold=" << threshold << std::endl;
-            
-            process_matrix(haar_data, band.blocks[i], [threshold](int& v) { if (abs(v) < threshold) v=0;  });
-        }      
-        
-    } );
+    codec.vq_inverse();
+    std::cout << "quantized-invert: pw=" << matrix_energy(haar_data) << haar_data;
 
-    std::cout << haar_data;
+    // std::cout << haar_data;
+    auto& reconstructed = codec.inverse();
 
-    auto reconstructed = dwt2d::decompress_data(haar_data, dwt2d::dwt53, max_levels); 
 
-    std::cout << "psnr=" <<  psnr(data, reconstructed) << raster(reconstructed);
 
+    std::cout << "psnr=" << psnr(data, reconstructed) << raster(reconstructed);
+
+    auto depacked = huffman::decompress(data_comp);
+    std::cout << "data unpacked:" << raster(depacked);
 }
+#else
+int main() {
+    std::vector<int> hist;
+    for (int i=0; i<32; i++)
+        hist.push_back(32-i);
+    std::cout << hist;
+    Codebook cb(hist);
+    std::cout << cb.get_codebook();
+    for (int i=-40; i <=40; i++)
+    std::cout << i << "=>" << cb.get_codeword(i) << "<="  << cb.get_value(cb.get_codeword(i)) << std::endl;
+    
+}
+#endif

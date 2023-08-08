@@ -64,7 +64,7 @@ class Codebook {
     Codebook(std::vector<int> hist) {
         //std::cerr << "histogram=" << hist;
 
-        process_range(hist.begin() + 4, hist.end(), hist.begin());
+        process_range(hist.begin(), hist.end(), hist.begin());
 
         for (int i = 0; i < hist.size(); ++i) {
             if (hist[i]) {

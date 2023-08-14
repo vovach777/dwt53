@@ -89,7 +89,7 @@ class BitWriter {
     std::vector<uint32_t> vec;
     uint32_t bit_buf_ = 0;  // буфер для хранения битов
     int bit_left_ = 32;  // счетчик битов в буфере
-    std::vector<uint32_t>::size_type size_; //current vector tail
+    std::vector<uint32_t>::size_type size_=0; //current vector tail
 };
 
 class BitReader {

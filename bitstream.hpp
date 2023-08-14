@@ -1,3 +1,4 @@
+//https://raw.githubusercontent.com/vovach777/BitStream/main/bitstream.hpp
 #pragma once
 #include <cstdint>
 #include <iostream>
@@ -6,32 +7,14 @@
 #include <stdexcept>
 
 class BitWriter {
-/*
 
-static_inline void put_bits(PutBitContext *s, int n, uint32_t value)
-{
-    check_grow(s);
-    uint32_t bit_buf;
-    int bit_left;
-    bit_left = s->bit_left;
-    bit_buf  = s->bit_buf;
-
-    if (n < bit_left) {
-        bit_buf     = (bit_buf << n) | value;
-        bit_left   -= n;
-    } else {
-        bit_buf   <<= bit_left;
-        bit_buf    |= value >> (n - bit_left);
-        *((uint32_t*) s->buf_ptr) = __builtin_bswap32(bit_buf);
-        s->buf_ptr += 4;
-        bit_left   += 32 - n;
-        bit_buf     = value;
-    }
-    s->bit_buf  = bit_buf;
-    s->bit_left = bit_left;
-}
-*/
     inline void put_bits(int n, uint32_t value) {
+    if (n == 0)
+        throw std::out_of_range("n == 0, can not write 0 bits");
+    if (   ~static_cast<uint32_t>((1<<n)-1) & value) {
+        std::cerr << std::endl << "bits = " << n << ", value = " << value << std::endl;
+        throw std::out_of_range("value out of n-bits !!!");
+    }
 
     auto bit_left = bit_left_;
     auto bit_buf  = bit_buf_;

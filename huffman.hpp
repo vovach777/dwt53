@@ -1,3 +1,4 @@
+//https://raw.githubusercontent.com/vovach777/huffman_advanced/main/huffman.hpp
 #pragma once
 #include <algorithm>
 #include <bitset>
@@ -13,7 +14,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
 #include "bitstream.hpp"
 #include "utils.hpp"
 
@@ -78,7 +78,8 @@ namespace pack {
                 for (auto symbol : DHT[i]) {
                     auto catindex = symbol_to_catindex(symbol);
                     dest.writeBits(4, catindex & 0xf);
-                    dest.writeBits(catindex & 0xf, catindex >> 4);
+                    if ( catindex > 0)
+                        dest.writeBits(catindex & 0xf, catindex >> 4);
                 }
             }
             // rest of DHT (16 bytes)

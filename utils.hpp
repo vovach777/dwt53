@@ -1,4 +1,6 @@
+//https://raw.githubusercontent.com/vovach777/huffman_advanced/main/utils.hpp
 #pragma once
+
 #include <algorithm>
 
 template <typename T>
@@ -106,3 +108,4 @@ Iterator find_nerest(Iterator begin, Iterator end, typename std::iterator_traits
         return (index < positive_index) ? -maxValue + index
                                         : index - positive_index + minValue;
     }
+

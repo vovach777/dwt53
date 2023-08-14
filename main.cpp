@@ -1,4 +1,4 @@
-// this is snapshot of project here: https://godbolt.org/z/8f9fMGTKq
+// this is snapshot of project here: https://godbolt.org/z/8f9fMGTKq          
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -49,23 +49,20 @@ the_matrix lenna = {
 };
  
 
-#if 1
 int main() {
-    int details = 3;
     int max_levels = 5;
-    double Q =
-        0.0;  // 0.4 - psnr=27;  0.2 - psnr=36;  0.1 - psnr=50, 0 - lossless
     dwt2d::Wavelet wavelet = dwt2d::dwt53;
     //auto data = make_envelope(32,32,1);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
-    //auto data = make_gradient(8,8,0,11,11,22);
+    //auto data = make_gradient(32,32,0,11,11,22);
     auto data = lenna;
     //auto data = make_sky(32,32);
+    //auto data = make_random(32);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
 
-    std::cout << "original: pw=" << matrix_energy(data) << data;
+    std::cout << "original: pw=" << matrix_energy(data) << raster(data);
     auto data_comp = compress(data);
     std::cout << "packed by huffman size = " << data_comp.size() << std::endl;
     // auto data_decomp = huffman::decompress(data_comp);
@@ -87,6 +84,7 @@ int main() {
 
 
     auto haar_data_comp = compress(haar_data);
+    decompress(haar_data_comp);
     std::cout << "packed by huffman size = " << haar_data_comp.size() << std::endl;
     
     codec.vq_forward();
@@ -94,6 +92,7 @@ int main() {
 
 
     auto haar_data_vq_comp = compress(haar_data);
+    decompress(haar_data_vq_comp);
     std::cout << "packed by huffman size = " << haar_data_vq_comp.size() << std::endl;
 
     codec.vq_inverse();
@@ -109,16 +108,3 @@ int main() {
     auto depacked = decompress(data_comp);
     std::cout << "data unpacked:" << raster(depacked);
 }
-#else
-int main() {
-    std::vector<int> hist;
-    for (int i=0; i<32; i++)
-        hist.push_back(32-i);
-    std::cout << hist;
-    Codebook cb(hist);
-    std::cout << cb.get_codebook();
-    for (int i=-40; i <=40; i++)
-    std::cout << i << "=>" << cb.get_codeword(i) << "<="  << cb.get_value(cb.get_codeword(i)) << std::endl;
-    
-}
-#endif

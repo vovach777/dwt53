@@ -55,14 +55,14 @@ int main() {
     //auto data = make_envelope(32,32,1);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
-    //auto data = make_gradient(32,32,0,11,11,22);
-    auto data = lenna;
-    //auto data = make_sky(32,32);
-    //auto data = make_random(32);
+    //auto data = make_gradient(128,128,0,111,111,222);
+    //auto data = lenna;
+     auto data = make_sky(128,96);
+     //auto data = make_random(128);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
 
-    std::cout << "original: pw=" << matrix_energy(data) << raster(data);
+    std::cout << "original: pw=" << matrix_energy(data) << std::endl;;
     auto data_comp = compress(data);
     std::cout << "packed by huffman size = " << data_comp.size() << std::endl;
     // auto data_decomp = huffman::decompress(data_comp);
@@ -80,31 +80,31 @@ int main() {
     auto& haar_data = codec.forward();
 
     // std::cout << raster(haar_data);
-    std::cout << "transformed: pw=" << matrix_energy(haar_data) << haar_data;
+    std::cout << "transformed: pw=" << matrix_energy(haar_data) << std::endl;
 
 
     auto haar_data_comp = compress(haar_data);
     decompress(haar_data_comp);
     std::cout << "packed by huffman size = " << haar_data_comp.size() << std::endl;
     
-    codec.vq_forward();
-    std::cout << "quantized: pw=" << matrix_energy(haar_data) << haar_data;
+    codec.adaptive_quantization();
+    std::cout << "quantized: pw=" << matrix_energy(haar_data) << std::endl;
 
 
     auto haar_data_vq_comp = compress(haar_data);
     decompress(haar_data_vq_comp);
     std::cout << "packed by huffman size = " << haar_data_vq_comp.size() << std::endl;
 
-    codec.vq_inverse();
-    std::cout << "quantized-invert: pw=" << matrix_energy(haar_data) << haar_data;
+    // codec.vq_inverse();
+    // std::cout << "quantized-invert: pw=" << matrix_energy(haar_data) << std::endl;
 
     // std::cout << haar_data;
     auto& reconstructed = codec.inverse();
 
 
 
-    std::cout << "psnr=" << psnr(data, reconstructed) << raster(reconstructed);
+    std::cout << "psnr=" << psnr(data, reconstructed) << std::endl;
 
     auto depacked = decompress(data_comp);
-    std::cout << "data unpacked:" << raster(depacked);
+    std::cout << "data unpacked:" << std::endl;
 }

@@ -113,6 +113,10 @@ class Codebook {
             return value_to_cw[v];
     }
 
+    int quantize(int v) {
+       return get_value( get_codeword(v) );
+    }
+
     int get_value(int cw) {
         if (is_empty())
             return cw; //by-pass

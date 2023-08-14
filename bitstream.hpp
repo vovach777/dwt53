@@ -50,13 +50,15 @@ class BitWriter {
     }
     auto size_in_bits() const { return size_*32 + (32-bit_left_); }
     auto size() const {  
-       return size_in_bits() + 7 >> 3;
+       return (size_in_bits() + 7) >> 3;
         }
   
     void flush() {
         if (bit_left_ == 32)
             return;
-   
+        if (vec.size() <= size_) {
+            vec.resize(size_+1);
+        }
         vec[size_] = 0;
         auto byte_by_byte = reinterpret_cast<uint8_t*>( &vec[size_] );     
         auto bit_left = bit_left_;

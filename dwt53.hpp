@@ -366,7 +366,7 @@ class Transform {
         return data_;
     }
 
-    void vq_forward() {
+    void adaptive_quantization() {
         hist_.clear();
         hist_.reserve(1024);
         // histogramm
@@ -390,25 +390,25 @@ class Transform {
             for (int i = 0; i < 3; i++)
                 process_matrix(
                     data_, geometry_[level].blocks[i],
-                    [this](int &v) { v = codebook_.get_codeword(v);});
+                    [this](int &v) { v = codebook_.quantize(v);});
         }
     }
 
-    void vq_inverse() {
-        if (codebook_.size()) {
-            for (int level = 0; level < levels_; ++level) {
-                for (int i = 0; i < 3; i++)
-                    process_matrix(
-                        data_, geometry_[level].blocks[i],
-                        [this](int &v) { v = codebook_.get_value(v); });
-            }
-        }
-    }
+    // void vq_inverse() {
+    //     if (codebook_.size()) {
+    //         for (int level = 0; level < levels_; ++level) {
+    //             for (int i = 0; i < 3; i++)
+    //                 process_matrix(
+    //                     data_, geometry_[level].blocks[i],
+    //                     [this](int &v) { v = codebook_.get_value(v); });
+    //         }
+    //     }
+    // }
 
-    void vq_inverse(Codebook codebook) {
-        codebook_ = std::move(codebook);
-        vq_inverse();
-    }
+    // void vq_inverse(Codebook codebook) {
+    //     codebook_ = std::move(codebook);
+    //     vq_inverse();
+    // }
 };
 
 }  // namespace dwt2d

@@ -8,5 +8,12 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address")
 
 add_executable(example_compress_decompress
     main.cpp
+    bitstream.hpp
+    dwt53.hpp               
+    huffman.hpp             
+    packmatrix.hpp          
+    quantization.hpp        
+    the_matrix.hpp          
+    utils.hpp
 )
 

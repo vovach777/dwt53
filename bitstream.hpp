@@ -56,7 +56,10 @@ class BitWriter {
     void flush() {
         if (bit_left_ == 32)
             return;
-   
+       //allways reserve
+        if (vec.size() <= size_) {
+            vec.resize(size_+1);
+        }
         vec[size_] = 0;
         auto byte_by_byte = reinterpret_cast<uint8_t*>( &vec[size_] );     
         auto bit_left = bit_left_;

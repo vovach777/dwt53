@@ -17,10 +17,9 @@
 #include "bitstream.hpp"
 #include "utils.hpp"
 
-namespace compress {
+namespace pack {
+    namespace impl {
     using namespace std;
-
-
     // A Huffman
     template <typename T = char>
     class Huffman {
@@ -296,4 +295,8 @@ namespace compress {
             }
         }
     };
+    }
+    //export section
+    template <typename T = char>
+    using Huffman = impl::Huffman<T>;
 }

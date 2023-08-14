@@ -11,6 +11,7 @@
 
 #include "utils.hpp"
 #include "packmatrix.hpp"
+using namespace pack;
 
 the_matrix lenna = {
     {158, 153, 168, 146, 95, 105, 110, 124, 129, 130, 132, 133, 132, 131, 131, 131, 129, 128, 129, 113, 128, 160, 157, 155, 148, 196, 166, 109, 125, 122, 131, 93, },
@@ -65,7 +66,7 @@ int main() {
     // cubicBlur3x3(data);
 
     std::cout << "original: pw=" << matrix_energy(data) << data;
-    auto data_comp = huffman::compress(data);
+    auto data_comp = compress(data);
     std::cout << "packed by huffman size = " << data_comp.size() << std::endl;
     // auto data_decomp = huffman::decompress(data_comp);
     // std::cout <<  data_decomp;
@@ -85,14 +86,14 @@ int main() {
     std::cout << "transformed: pw=" << matrix_energy(haar_data) << haar_data;
 
 
-    auto haar_data_comp = huffman::compress(haar_data);
+    auto haar_data_comp = compress(haar_data);
     std::cout << "packed by huffman size = " << haar_data_comp.size() << std::endl;
     
     codec.vq_forward();
     std::cout << "quantized: pw=" << matrix_energy(haar_data) << haar_data;
 
 
-    auto haar_data_vq_comp = huffman::compress(haar_data);
+    auto haar_data_vq_comp = compress(haar_data);
     std::cout << "packed by huffman size = " << haar_data_vq_comp.size() << std::endl;
 
     codec.vq_inverse();
@@ -105,7 +106,7 @@ int main() {
 
     std::cout << "psnr=" << psnr(data, reconstructed) << raster(reconstructed);
 
-    auto depacked = huffman::decompress(data_comp);
+    auto depacked = decompress(data_comp);
     std::cout << "data unpacked:" << raster(depacked);
 }
 #else

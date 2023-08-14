@@ -10,7 +10,7 @@
 #include "the_matrix.hpp"
 
 #include "utils.hpp"
-#include "huffmanpack.hpp"
+#include "packmatrix.hpp"
 
 the_matrix lenna = {
     {158, 153, 168, 146, 95, 105, 110, 124, 129, 130, 132, 133, 132, 131, 131, 131, 129, 128, 129, 113, 128, 160, 157, 155, 148, 196, 166, 109, 125, 122, 131, 93, },
@@ -55,18 +55,20 @@ int main() {
     double Q =
         0.0;  // 0.4 - psnr=27;  0.2 - psnr=36;  0.1 - psnr=50, 0 - lossless
     dwt2d::Wavelet wavelet = dwt2d::dwt53;
-    auto data = make_envelope(32,32,1);
+    //auto data = make_envelope(32,32,1);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
-    //auto data = make_gradient(32,32,0,11,11,22);
-    //auto data = lenna;
+    //auto data = make_gradient(8,8,0,11,11,22);
+    auto data = lenna;
     //auto data = make_sky(32,32);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
 
-    std::cout << "original: pw=" << matrix_energy(data) << raster(data);
+    std::cout << "original: pw=" << matrix_energy(data) << data;
     auto data_comp = huffman::compress(data);
     std::cout << "packed by huffman size = " << data_comp.size() << std::endl;
+    // auto data_decomp = huffman::decompress(data_comp);
+    // std::cout <<  data_decomp;
 
     // auto test = make_matrix(10,10, [](int x,int y,int&v){ v = x + y*10; });
     //  auto all_img = make_block( data );

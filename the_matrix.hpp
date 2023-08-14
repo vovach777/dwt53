@@ -8,6 +8,7 @@
 #include <ostream>
 #include <iomanip>
 #include <cassert>
+#include <cstdint>
 
 
 struct Index {
@@ -492,6 +493,7 @@ inline the_matrix make_sky(int width, int height) {
 }
 
 namespace inline_the_matrix {
+    
 inline int ilog2_32(uint32_t v)
 {
    if (v == 0)
@@ -521,6 +523,18 @@ template <typename the_matrix>
 int matrix_energy(the_matrix&& m)
 {
     return bitSize(std::forward<the_matrix>(m)) / 8;
+}
+
+inline std::vector<int> flatten(const the_matrix & matrix)
+{
+    std::vector<int> vec; 
+    vec.reserve(  matrix.size() * matrix[0].size());
+    auto vec_ins = std::back_inserter(vec);
+    for (const auto & row : matrix)
+    {
+        std::copy(row.begin(), row.end(), vec_ins);
+    }
+    return vec;
 }
 
 

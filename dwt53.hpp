@@ -267,17 +267,10 @@ class Transform {
     DWTFunction forward_ = &::dwt53;
     IDWTFunction inverse_ = &::idwt53;
     int levels_ = 1;
-    // std::vector<int> x_sizes_;
-    // std::vector<int> y_sizes_;
     std::vector<int> LH_storage_;
     std::vector<dwt2d::Band> geometry_;
-    std::vector<int> hist_;
-    Codebook codebook_;
-
    public:
-   Transform() {
-
-   }
+   Transform() = default;
     void set_transform(DWTFunction forward, IDWTFunction inverse) {
         forward_ = forward;
         inverse_ = inverse;
@@ -310,13 +303,9 @@ class Transform {
                            the_matrix const &data) {
         data_ = data;
         set_transform(transform);
-        // x_sizes_ = calc_L_sizes(data_[0].size());
-        // y_sizes_ = calc_L_sizes(data_.size());
         LH_storage_.resize(std::max(data[0].size(), data.size()));
         geometry_ = calc_geometry(data[0].size(), data.size(), levels);
         levels_ = geometry_.size();
-        hist_.clear();
-        codebook_.clear();
     }
 
     the_matrix &forward() {
@@ -366,49 +355,34 @@ class Transform {
         return data_;
     }
 
-    void adaptive_quantization() {
-        hist_.clear();
-        hist_.reserve(1024);
-        // histogramm
+    void quantization(int Q = 4, int details=4) {
+
+        std::vector<int> flat_data;
+        flat_data.reserve(data_.size() * data_[0].size());
+        int max_value = 0;
+
+
         for (int level = 0; level < levels_; ++level) {
             for (int i = 0; i < 3; i++)
                 process_matrix(data_, geometry_[level].blocks[i],
-                               [this](int v) {
-                                   int value = v;
-                                   if (value < 0) value = -value;
-                                   if (value >= hist_.size()) {
-                                       hist_.resize(value + 1);
-                                   }
-                                   ++hist_[value];
+                               [&](int v) {
+                                   max_value = std::max(max_value,abs(v));
+                                   flat_data.push_back(v);
                                });
         };
 
-        codebook_ = Codebook(hist_);
-        std::cerr << "codebook=" << codebook_.get_codebook();
+        auto lockup_table = scalar_adaptive_quantization(flat_data.begin(), flat_data.end(), Q, max_value, details );
+
 
         for (int level = 0; level < levels_; ++level) {
             for (int i = 0; i < 3; i++)
                 process_matrix(
                     data_, geometry_[level].blocks[i],
-                    [this](int &v) { v = codebook_.quantize(v);});
+                    [&](int &v) { v = lockup_table[v];}
+                    );
         }
     }
 
-    // void vq_inverse() {
-    //     if (codebook_.size()) {
-    //         for (int level = 0; level < levels_; ++level) {
-    //             for (int i = 0; i < 3; i++)
-    //                 process_matrix(
-    //                     data_, geometry_[level].blocks[i],
-    //                     [this](int &v) { v = codebook_.get_value(v); });
-    //         }
-    //     }
-    // }
-
-    // void vq_inverse(Codebook codebook) {
-    //     codebook_ = std::move(codebook);
-    //     vq_inverse();
-    // }
 };
 
 }  // namespace dwt2d

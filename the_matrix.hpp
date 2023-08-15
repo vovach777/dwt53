@@ -1,8 +1,10 @@
 #ifndef THE_MATRIX_DEFINED
    #define THE_MATRIX_DEFINED
 
-#define _USE_MATH_DEFINES
 #include <cmath>
+#ifndef M_PI
+ #define M_PI       3.14159265358979323846
+#endif
 #include <vector>
 #include <algorithm>
 #include <ostream>
@@ -70,13 +72,13 @@ inline Range get_range(the_matrix const &matrix, Block const& block)
 {
     int minVal = std::numeric_limits<int>::max();
     int maxVal = std::numeric_limits<int>::min();
-    
+
     for (int j=0; j < block.y.size; j++)
     for (int i=0; i < block.x.size; i++)
     {
         auto val = getValue(matrix, block.x.offs + i, block.y.offs + j);
         minVal = std::min(minVal, val);
-        maxVal = std::max(maxVal, val);        
+        maxVal = std::max(maxVal, val);
     }
     return Range{minVal,maxVal};
 }
@@ -86,7 +88,7 @@ inline void raster(std::ostream& o,the_matrix const& img)
 {
     static char pixels[] = {' ', ':', ';' ,'x','X','@'};
     auto range = get_range(img);
-    
+
 
       for (const auto & row : img) {
       for (const auto v : row)
@@ -106,7 +108,7 @@ inline std::ostream& raster(std::ostream& os) {
 
 
 inline std::ostream& operator << (std::ostream& o,  std::vector<int> const & a)
-{   
+{
     for (auto v : a)
         o << std::setw(3) << v << " ";
     o << std::endl;
@@ -167,10 +169,10 @@ inline std::vector<int> get_col(the_matrix const &matrix, int x) {
 
 inline void set_col(the_matrix  &matrix, int x,  std::vector<int> const & col) {
     assert( col.size() == matrix.size() );
-    
+
     for (int i=0; i< col.size(); i++ )
         matrix[i][x] = col[i];
-    
+
 }
 
 
@@ -449,10 +451,10 @@ inline auto process_point(int x, int y, T &&value, F f) -> decltype(f(x,y,value)
 
 template <typename F, typename the_matrix>
 auto process_matrix(the_matrix && matrix, F f) -> decltype( matrix[0].size(), matrix.size(), matrix[0][0], void())
-{    
+{
     for (int y=0; y<matrix.size();y++)
     for (int x=0; x<matrix[y].size();x++)
-        process_point(x,y,matrix[y][x],f);    
+        process_point(x,y,matrix[y][x],f);
 }
 
 
@@ -464,7 +466,7 @@ auto process_matrix(the_matrix &&matrix, Block const& block, F f) -> decltype( m
     {
         int x = block.x.offs+i;
         int y = block.y.offs+j;
-        process_point(x,y,matrix.at(y).at(x),f);    
+        process_point(x,y,matrix.at(y).at(x),f);
     }
 }
 
@@ -479,12 +481,12 @@ inline the_matrix make_matrix(int width, int height, F f)
 inline the_matrix make_sky(int width, int height) {
     auto result = make_matrix(width, height,
      [sz=width*height](int x, int y, int &v){
-        
+
           if (rand() % 4 == 0)
              v = 255;
          else
             v =  y + x/4;
-            
+
 
      } );
      cubicBlur3x3(result);
@@ -493,7 +495,7 @@ inline the_matrix make_sky(int width, int height) {
 }
 
 namespace inline_the_matrix {
-    
+
 inline int ilog2_32(uint32_t v)
 {
    if (v == 0)
@@ -507,15 +509,15 @@ template <typename the_matrix>
 int bitSize(the_matrix && matrix) {
     int bitcount = 0;
     auto range = get_range(matrix);
-        
-    process_matrix( std::forward<the_matrix>(matrix), [&](int v){        
-            
+
+    process_matrix( std::forward<the_matrix>(matrix), [&](int v){
+
             if ( range.min >= 0)
                 bitcount += inline_the_matrix::ilog2_32(v);//unsigned bitsize
             else
                 bitcount += inline_the_matrix::ilog2_32(v)+1;//signed bitsize
     });
-    
+
     return bitcount;
 }
 
@@ -527,7 +529,7 @@ int matrix_energy(the_matrix&& m)
 
 inline std::vector<int> flatten(const the_matrix & matrix)
 {
-    std::vector<int> vec; 
+    std::vector<int> vec;
     vec.reserve(  matrix.size() * matrix[0].size());
     auto vec_ins = std::back_inserter(vec);
     for (const auto & row : matrix)

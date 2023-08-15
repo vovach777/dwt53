@@ -15,7 +15,7 @@ class scalar_adaptive_quantization
     scalar_adaptive_quantization() = default;
 
     template <typename Iterator>
-    scalar_adaptive_quantization(Iterator begin, Iterator end, int Q, int n = 256, int d = 4 ) : center(n), Q(Q)
+    scalar_adaptive_quantization(Iterator begin, Iterator end, int Q, int n = 256, int d = 4 ) : n(n), Q(Q)
     {
 
         enabled = begin != end;
@@ -24,6 +24,7 @@ class scalar_adaptive_quantization
 
         const int max_elem = n*2;
         lockup_table.resize(max_elem+1);
+        center = lockup_table.data() + n;
         auto& histogram = lockup_table;
 
         codebook.reserve(256);
@@ -39,7 +40,7 @@ class scalar_adaptive_quantization
             if (abs(*it) > d)
                 histogram[ std::clamp( *it + n,0, max_elem) ] += 1;
         }
-        quantization(histogram.begin(), histogram.end());
+        quantization(histogram.data(), histogram.data()+histogram.size());
         //std::fill( histogram.begin(), histogram.end(), 0);
 
         std::sort(codebook.begin(),  codebook.end());
@@ -60,49 +61,37 @@ class scalar_adaptive_quantization
             return v;
         const int max_elem = static_cast<int>( lockup_table.size()-1 );
 
-        return lockup_table[ std::clamp( v + center,0, max_elem) ];
+        return lockup_table[ std::clamp( v + n,0, max_elem) ];
    }
     const int operator[](int v) const { return at(v); }
 
 private:
-    void quantization(std::vector<int>::iterator begin, std::vector<int>::iterator end)
+    void quantization(int* begin, int *end)
     {
-        if (begin == end)
+        if (begin >= end)
             return;
         auto maxIt = std::max_element(begin, end);
 
         if ( *maxIt == 0)
             return;
 
-        codebook.push_back( std::distance( lockup_table.begin() + center, maxIt ));
-        //*maxIt = 0;
+        int value = std::distance( center, maxIt );
+        codebook.push_back( value );
 
-        auto clear_left = maxIt == begin ? end : maxIt - 1;
-        auto clear_right = maxIt + 1;
+        int distance_around_it_max = std::max(1, static_cast<int>( sqrt( 1+abs(value) ) * Q )); //value to quantize step
 
-        auto distance_around_it_max = sqrt( 1+abs(std::distance(lockup_table.begin() + center, maxIt)) ) * Q;
+        auto left_end    = maxIt - distance_around_it_max;
+        auto right_begin = maxIt + distance_around_it_max;
 
-        while (distance_around_it_max-- > 0) {
-            if (clear_left != end) {
-               // *clear_left = 0;
-                if (clear_left == begin)
-                    clear_left = end;
-                else
-                    --clear_left;
-            }
-            if (clear_right != end) {
-                //*clear_right = 0;
-                ++clear_right;
-            }
-        }
-        if (clear_left != end)  quantization(begin, clear_left);
-        if (clear_right != end) quantization(clear_right, end);
+        if (left_end    > begin)  quantization(begin, left_end);
+        if (right_begin < end)    quantization(right_begin, end);
     }
 
     std::vector<int> lockup_table;
     std::vector<int> codebook;
     bool enabled = false;
-    int center = 0;
+    int *center = nullptr;
+    int n = 0;
     int Q = 0;
 
 };

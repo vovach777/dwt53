@@ -1,4 +1,4 @@
-// this is snapshot of project here: https://godbolt.org/z/8f9fMGTKq          
+// this is snapshot of project here: https://godbolt.org/z/8f9fMGTKq
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -47,7 +47,7 @@ the_matrix lenna = {
     {108, 146, 151, 171, 61, 49, 56, 68, 56, 89, 64, 39, 80, 98, 130, 138, 142, 144, 140, 146, 162, 184, 217, 159, 94, 86, 144, 101, 74, 85, 100, 69, },
     {73, 164, 159, 162, 51, 58, 65, 79, 75, 72, 63, 69, 113, 128, 131, 135, 140, 145, 146, 147, 158, 175, 206, 182, 92, 123, 114, 96, 83, 100, 89, 59, },
 };
- 
+
 
 int main() {
     int max_levels = 5;
@@ -55,9 +55,9 @@ int main() {
     //auto data = make_envelope(32,32,1);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
-    //auto data = make_gradient(128,128,0,111,111,222);
+    auto data = make_gradient(64,64,0,111,111,222);
     //auto data = lenna;
-     auto data = make_sky(128,96);
+     //auto data = make_sky(128,96);
      //auto data = make_random(128);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
@@ -86,8 +86,8 @@ int main() {
     auto haar_data_comp = compress(haar_data);
     decompress(haar_data_comp);
     std::cout << "packed by huffman size = " << haar_data_comp.size() << std::endl;
-    
-    codec.adaptive_quantization();
+
+    codec.quantization(1);
     std::cout << "quantized: pw=" << matrix_energy(haar_data) << std::endl;
 
 

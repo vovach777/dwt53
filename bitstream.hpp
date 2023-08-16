@@ -6,12 +6,20 @@
 #include <stdexcept>
 #include <limits>
 
+
+inline int ilog2_32(uint32_t v, int infinity_val = 1)
+{
+   if (v == 0)
+      return infinity_val;
+   return 32-__builtin_clz(v);
+}
+
 class BitWriter {
 
     inline void put_bits(int n, uint32_t value) {
     if (n == 0)
         throw std::out_of_range("n == 0, can not write 0 bits");
-    if (   ~static_cast<uint32_t>((1<<n)-1) & value) {
+    if ( ilog2_32(value,1) > n) {
         std::cerr << std::endl << "bits = " << n << ", value = " << value << std::endl;
         throw std::out_of_range("value out of n-bits !!!");
     }
@@ -144,7 +152,7 @@ class BitReader {
         // assert(n>=0 && n<=32);
         if (n==0)
             return 0;
-            
+
         if (n==1)
             return get_bits1();
 

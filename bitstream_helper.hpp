@@ -1,14 +1,7 @@
 #pragma once
+#include "bitstream.hpp"
 
 class ValueWriter {
-
-inline int ilog2_32(uint32_t v)
-{
-   if (v == 0)
-      return 1;
-   return 32-__builtin_clz(v);
-}
-
     public:
     ValueWriter() = delete;
     ValueWriter(BitWriter &ref) : ref(ref) {};
@@ -31,6 +24,23 @@ inline int ilog2_32(uint32_t v)
         }
         ref.writeBits(n,value);
     }
+
+    void encode_golomb( unsigned k, unsigned value ) {
+     
+        auto n_ = ilog2_32(value>>k,0);
+        auto base = (1 << n_)-1;
+        auto n = n_+1+k+n_;
+        if (n > 32) {
+            ref.writeBits(n_,base);
+            ref.writeBits(1, 0);
+            ref.writeBits(n_+k, value);
+            return;
+        }
+        value = (base << (n_+1+k)) | value;
+        ref.writeBits(n,value);
+    }
+
+
     private:
     BitWriter&ref;
 };
@@ -51,6 +61,11 @@ class ValueReader {
 
         return v;
     }
+unsigned decode_golomb(unsigned k) {
+    
+    while (ref.readBit()) ++k;
+    return ref.readBits(k);
+}
     private:
     BitReader& ref;
 };

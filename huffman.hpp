@@ -73,12 +73,12 @@ namespace pack {
         void encodeHuffmanTree(BitWriter& dest) {
             if (DHT.size() == 0) throw std::domain_error("No DHT found!");
 
-            ValueWriter vv(dest);
+            ValueWriter vw(dest);
 
-            vv.encode(4,DHT.size());
+            vw.encode_golomb(5,DHT.size());
             for (int i = 0; i < DHT.size(); i++) {
                 ///dest.writeBits(8, DHT[i].size());
-                vv.encode(8, DHT[i].size());
+                vw.encode_golomb(3, DHT[i].size());
                 for (auto symbol : DHT[i]) {
                     auto catindex = symbol_to_catindex(symbol);
                     dest.writeBits(4, catindex & 0xf);
@@ -93,10 +93,10 @@ namespace pack {
             ValueReader vr(src);
             DHT.clear();
             //DHT.resize(src.readBits(8));
-            DHT.resize(vr.decode(4));
+            DHT.resize(vr.decode_golomb(5));
             for (int i = 0; i < DHT.size(); i++) {
                 //DHT[i].resize(src.readBits(8));
-                DHT[i].resize(vr.decode(8));
+                DHT[i].resize(vr.decode_golomb(3));
                 if (DHT[i].size() == 0) continue;
                 cout << i << " (" << DHT[i].size() << ") :";
                 // cout << "DHT_" << i << ":" << DHT[i].size() << endl;

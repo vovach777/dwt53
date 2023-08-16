@@ -59,7 +59,7 @@ namespace pack {
 
             // found a leaf node
             if (!node->left && !node->right) {
-                assert(len <= 16 && len > 0);
+                //assert(len <= 16 && len > 0);
                 if (DHT.size() < len) DHT.resize(len);
                 DHT[len - 1].push_back(node->ch);
             }
@@ -72,7 +72,9 @@ namespace pack {
         void encodeHuffmanTree(BitWriter& dest) {
             if (DHT.size() == 0) throw std::domain_error("No DHT found!");
 
-            vector<bool> str;
+            
+
+            dest.writeBits(8,DHT.size());
             for (int i = 0; i < DHT.size(); i++) {
                 dest.writeBits(8, DHT[i].size());
                 for (auto symbol : DHT[i]) {
@@ -82,21 +84,17 @@ namespace pack {
                         dest.writeBits(catindex & 0xf, catindex >> 4);
                 }
             }
-            // rest of DHT (16 bytes)
-            for (int i = DHT.size(); i < 16; i++) {
-                dest.writeBits(8, 0);
-            }
         }
 
         void decodeHuffmanTree(BitReader& src) {
             // decode huffman table
             DHT.clear();
-            DHT.resize(16);
+            DHT.resize(src.readBits(8));
 
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < DHT.size(); i++) {
                 DHT[i].resize(src.readBits(8));
                 if (DHT[i].size() == 0) continue;
-                cout << i << ":";
+                cout << i << " (" << DHT[i].size() << ") :";
                 // cout << "DHT_" << i << ":" << DHT[i].size() << endl;
                 for (auto& value : DHT[i]) {
                     auto cat = src.readBits(4);

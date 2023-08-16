@@ -56,24 +56,26 @@ int main() {
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
     //auto data = make_gradient(64,64,0,111,111,222);
-    auto data = lenna;
+    //auto data = lenna;
      //auto data = make_sky(128,96);
-     //auto data = make_random(128);
-    // cubicBlur3x3(data);
-    // cubicBlur3x3(data);
+     auto data = make_random(512);
+     //cubicBlur3x3(data);
+     // cubicBlur3x3(data);
 
     std::cout << "original: pw=" << matrix_energy(data) << std::endl;;
+    
+    try {
     auto data_comp = compress(data);
     std::cout << "packed by huffman size = " << data_comp.size() << std::endl;
+    auto depacked = decompress(data_comp);
+   // std::cout << "data unpacked:" << std::endl;
+    }
+    catch(std::exception &e){
+        std::cout << "original pack fail: " << e.what() << std::endl;
+    }
     // auto data_decomp = huffman::decompress(data_comp);
     // std::cout <<  data_decomp;
 
-    // auto test = make_matrix(10,10, [](int x,int y,int&v){ v = x + y*10; });
-    //  auto all_img = make_block( data );
-    //   quantization_block(data,all_img, true);
-    //   quantization_block(data,all_img, false);
-    //  std::cout << "quantized:" << raster(data);
-    //  std::cout << "psnr=" << psnr(lenna, data) << std::endl;
 
     dwt2d::Transform codec;
     codec.prepare_transform(max_levels, wavelet, data);
@@ -88,15 +90,15 @@ int main() {
     std::cout << "packed by huffman size = " << haar_data_comp.size() << std::endl;
 
     codec.quantization(1);
-    std::cout << "quantized: pw=" << matrix_energy(haar_data) << std::endl;
+    std::cout << "quantized: pw=" << matrix_energy(haar_data) <<  std::endl;
 
 
     auto haar_data_vq_comp = compress(haar_data);
+    // std::cout << "hufman-codes:";
+    // for (auto v : haar_data_vq_comp )
+    //     std::cout << static_cast<int>(v) << " ";
     decompress(haar_data_vq_comp);
     std::cout << "packed by huffman size = " << haar_data_vq_comp.size() << std::endl;
-
-    // codec.vq_inverse();
-    // std::cout << "quantized-invert: pw=" << matrix_energy(haar_data) << std::endl;
 
     // std::cout << haar_data;
     auto& reconstructed = codec.inverse();
@@ -105,6 +107,5 @@ int main() {
 
     std::cout << "psnr=" << psnr(data, reconstructed) << std::endl;
 
-    auto depacked = decompress(data_comp);
-    std::cout << "data unpacked:" << std::endl;
+
 }

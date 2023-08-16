@@ -1,10 +1,10 @@
-//https://raw.githubusercontent.com/vovach777/BitStream/main/bitstream.hpp
 #pragma once
 #include <cstdint>
 #include <iostream>
 #include <ostream>
 #include <vector>
 #include <stdexcept>
+#include <limits>
 
 class BitWriter {
 
@@ -42,17 +42,17 @@ class BitWriter {
     inline void writeBit(bool value) { put_bits(1,value);}
     inline void writeBit0() { writeBit(true);}
     inline void writeBit1() { writeBit(false);}
-    auto data() const { 
-        return  reinterpret_cast<const uint8_t*>( vec.data()); 
+    auto data() const {
+        return  reinterpret_cast<const uint8_t*>( vec.data());
     }
-    auto data() { 
-        return  reinterpret_cast<uint8_t*>( vec.data()); 
+    auto data() {
+        return  reinterpret_cast<uint8_t*>( vec.data());
     }
     auto size_in_bits() const { return size_*32 + (32-bit_left_); }
-    auto size() const {  
+    auto size() const {
        return (size_in_bits() + 7) >> 3;
         }
-  
+
     void flush() {
         if (bit_left_ == 32)
             return;
@@ -60,7 +60,7 @@ class BitWriter {
             vec.resize(size_+1);
         }
         vec[size_] = 0;
-        auto byte_by_byte = reinterpret_cast<uint8_t*>( &vec[size_] );     
+        auto byte_by_byte = reinterpret_cast<uint8_t*>( &vec[size_] );
         auto bit_left = bit_left_;
         auto bit_buf = bit_buf_;
         if (bit_left < 32)
@@ -95,7 +95,7 @@ class BitWriter {
 };
 
 class BitReader {
- 
+
 
     inline unsigned int get_bits1() {
         size_t _index = index;
@@ -118,7 +118,7 @@ class BitReader {
         if (n == 0) return 0;
         if (index+n > size_in_bits) {
             throw std::out_of_range("(index+n > size_in_bits)!!!");
-        }       
+        }
         union unaligned_32 {
             uint32_t l;
         } __attribute__((packed)) __attribute__((may_alias));

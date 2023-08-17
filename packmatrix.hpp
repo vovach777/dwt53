@@ -65,6 +65,7 @@ inline std::vector<uint8_t> compress(const the_matrix& matrix) {
         enc.comp(br.readBit());
     }
     enc.comp_eof();
+    std::cerr << "DMC nodes = " << enc.get_nodes_count() << std::endl;
     return enc.get_encoded();
 }
 

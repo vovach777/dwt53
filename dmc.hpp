@@ -85,7 +85,7 @@ class dmc {
         }
     }
 
-    void encode_eof() {
+    void comp_eof() {
         min = max - 1; 
         encoded.push_back(static_cast<uint8_t>((min >> 16) & 0xff));
         encoded.push_back(static_cast<uint8_t>((min >> 8) & 0xff));

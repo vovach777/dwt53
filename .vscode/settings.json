@@ -84,7 +84,11 @@
         "__string": "cpp",
         "chrono": "cpp",
         "*.tcc": "cpp",
-        "memory_resource": "cpp"
-    }
+        "memory_resource": "cpp",
+        "__memory": "cpp",
+        "random": "cpp",
+        "functional": "cpp"
+    },
+    "cmake.configureOnOpen": true
 
 }

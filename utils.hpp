@@ -109,3 +109,22 @@ Iterator find_nerest(Iterator begin, Iterator end, typename std::iterator_traits
                                         : index - positive_index + minValue;
     }
 
+/* signed <-> unsigned */
+inline unsigned s2u(int v) {
+   const int uv = -2*v-1;
+   return (unsigned)(uv ^ (uv>>31));
+}
+
+inline int u2s(unsigned uv) {
+    const int v = (int)(uv+1U);
+    return v&1 ? v>>1 : -(v>>1);
+}
+
+
+
+inline int ilog2_32(uint32_t v, int infinity_val = 1)
+{
+   if (v == 0)
+      return infinity_val;
+   return 32-__builtin_clz(v);
+}

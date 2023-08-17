@@ -13,11 +13,13 @@ add_definitions(-D_USE_MATH_DEFINES)
 add_executable(example_compress_decompress
     main.cpp
     bitstream.hpp
+    bitstream_helper.hpp
     dwt53.hpp
     huffman.hpp
     packmatrix.hpp
     quantization.hpp
     the_matrix.hpp
     utils.hpp
+    dmc.hpp
 )
 

@@ -5,14 +5,7 @@
 #include <vector>
 #include <stdexcept>
 #include <limits>
-
-
-inline int ilog2_32(uint32_t v, int infinity_val = 1)
-{
-   if (v == 0)
-      return infinity_val;
-   return 32-__builtin_clz(v);
-}
+#include "utils.hpp"
 
 class BitWriter {
 

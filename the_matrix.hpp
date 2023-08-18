@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <cassert>
 #include <cstdint>
+#include "utils.hpp"
 
 
 struct Index {
@@ -494,28 +495,17 @@ inline the_matrix make_sky(int width, int height) {
      return result;
 }
 
-namespace inline_the_matrix {
-
-inline int ilog2_32(uint32_t v)
-{
-   if (v == 0)
-      return 1;
-   return 32-__builtin_clz(v);
-}
-}
-
-
 template <typename the_matrix>
 int bitSize(the_matrix && matrix) {
     int bitcount = 0;
-    auto range = get_range(matrix);
+   // auto range = get_range(matrix);
 
     process_matrix( std::forward<the_matrix>(matrix), [&](int v){
 
-            if ( range.min >= 0)
-                bitcount += inline_the_matrix::ilog2_32(v);//unsigned bitsize
+            if ( v >= 0)
+                bitcount += ilog2_32(v,1);//unsigned bitsize
             else
-                bitcount += inline_the_matrix::ilog2_32(v)+1;//signed bitsize
+                bitcount += ilog2_32(abs(v))+1;//signed bitsize
     });
 
     return bitcount;

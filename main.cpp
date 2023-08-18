@@ -55,8 +55,13 @@ int main() {
     //auto data = make_envelope(32,32,1);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
+<<<<<<< HEAD
     //auto data = make_gradient(512,512,0,128,128,255);
     auto data = lenna;
+=======
+    auto data = make_gradient(1024,1024,0,128,128,255);
+    //auto data = lenna;
+>>>>>>> 672c601e140178bc1d91838cdf454d59f4cd9833
      //auto data = make_sky(128,96);
      //auto data = make_random(512);
      //cubicBlur3x3(data);
@@ -65,9 +70,10 @@ int main() {
     std::cout << "original: pw=" << matrix_energy(data) << std::endl;;
 
     try {
-    auto data_comp = compress(data);
+    auto data_comp = huffman::compress(data);
     std::cout << "packed by huffman size = " << data_comp.size() << std::endl;
-    auto depacked = decompress(data_comp);
+    auto data_comp2 = DMC::compress(data);
+      std::cout << "packed by DMC size = " << data_comp2.size() << std::endl;
    // std::cout << "data unpacked:" << std::endl;
     }
     catch(std::exception &e){
@@ -85,21 +91,30 @@ int main() {
     std::cout << "transformed: pw=" << matrix_energy(haar_data) << std::endl;
 
 
-    auto haar_data_comp = compress(haar_data);
-    decompress(haar_data_comp);
+    auto haar_data_comp = huffman::compress(haar_data);
     std::cout << "packed by huffman size = " << haar_data_comp.size() << std::endl;
+    haar_data_comp = DMC::compress(haar_data);
+     std::cout << "packed by DMC size = " << haar_data_comp.size() << std::endl;
 
     codec.quantization(1);
     std::cout << "quantized: pw=" << matrix_energy(haar_data) <<  std::endl;
 
 
-    auto haar_data_vq_comp = compress(haar_data);
+    auto haar_data_vq_comp = huffman::compress(haar_data);
     // std::cout << "hufman-codes:";
     // for (auto v : haar_data_vq_comp )
     //     std::cout << static_cast<int>(v) << " ";
-    decompress(haar_data_vq_comp);
     std::cout << "packed by huffman size = " << haar_data_vq_comp.size() << std::endl;
-
+    haar_data_vq_comp = DMC::compress(haar_data);
+     std::cout << "packed by DMC size = " << haar_data_vq_comp.size() << std::endl;
+    auto haar_data_vq_exp = DMC::decompress(haar_data_vq_comp);
+    for (int y=0; y < haar_data_vq_exp.size();y++)
+    for (int x=0; x < haar_data_vq_exp[y].size();x++) {
+        if (haar_data_vq_exp[y][x] != haar_data[y][x]) {
+              std::cout << "DMC fail!" << std::endl;
+              abort();
+        }
+    }
     // std::cout << haar_data;
     auto& reconstructed = codec.inverse();
 

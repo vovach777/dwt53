@@ -1,30 +1,34 @@
-//https://raw.githubusercontent.com/vovach777/huffman_advanced/main/utils.hpp
 #pragma once
 
 #include <algorithm>
 
 template <typename T>
-inline T square(const T v) {
-   return v*v;
+inline T square(const T v)
+{
+    return v * v;
 }
 
 template <typename T>
-inline T median(T a, T b, T c) {
-   if (a<b) {
-      if (b<c)
-         return b;
-      return  (a < c) ? c : a;
-   } else {
-      if (b>=c)
-         return b;
-      return a < c ? a : c;
-   }
+inline T median(T a, T b, T c)
+{
+    if (a < b)
+    {
+        if (b < c)
+            return b;
+        return (a < c) ? c : a;
+    }
+    else
+    {
+        if (b >= c)
+            return b;
+        return a < c ? a : c;
+    }
 }
 
-inline int r_shift( int num, int shift) {
-    
+inline int r_shift(int num, int shift)
+{
+
     return (num < 0 ? -(-num >> shift) : num >> shift);
-    
 }
 
 template <typename Iterator>
@@ -34,7 +38,8 @@ Iterator find_nerest(Iterator begin, Iterator end, typename std::iterator_traits
         return end;
     auto it = std::lower_bound(begin, end, val);
 
-    if (it == end ) {
+    if (it == end)
+    {
         return std::prev(end);
     };
     if (it == begin)
@@ -47,65 +52,89 @@ Iterator find_nerest(Iterator begin, Iterator end, typename std::iterator_traits
     return lower_distance < upper_distance ? std::prev(it) : it;
 }
 
+// Function to convert a coefficient into a "category/index" pair in JPEG
+// format
+inline int symbol_to_catindex(int coeff)
+{
+    // If the coefficient is negative, we change its sign to positive
+    uint32_t positive = (coeff < 0) ? -coeff : coeff;
+    if (positive == 0)
+        return 0;
 
-    // Function to convert a coefficient into a "category/index" pair in JPEG
-    // format
-   inline int symbol_to_catindex(int coeff) {
-        // If the coefficient is negative, we change its sign to positive
-        uint32_t positive = (coeff < 0) ? -coeff : coeff;
-        if (positive == 0) return 0;
+    // Calculate the category of the coefficient as the number of bits
+    // needed to represent its absolute value
+    int cat = 32 - __builtin_clz(positive);
 
-        // Calculate the category of the coefficient as the number of bits
-        // needed to represent its absolute value
-        int cat = 32 - __builtin_clz(positive);
+    // Calculate the minimum and maximum value in the given category
+    int minValue = (1 << (cat - 1));
+    int maxValue = (1 << cat) - 1;
 
-        // Calculate the minimum and maximum value in the given category
-        int minValue = (1 << (cat - 1));
-        int maxValue = (1 << cat) - 1;
+    // Calculate the index of the coefficient within the given category
+    auto index = (coeff < 0) ? maxValue + coeff
+                             : coeff - minValue + (maxValue - minValue + 1);
 
-        // Calculate the index of the coefficient within the given category
-        auto index = (coeff < 0) ? maxValue + coeff
-                                 : coeff - minValue + (maxValue - minValue + 1);
+    // Return the "category/index" pair in JPEG format
+    return cat | index << 4;
+}
 
-        // Return the "category/index" pair in JPEG format
-        return cat | index << 4;
-    }
+// Function to recover the coefficient from a "category/index" pair in JPEG
+// format
+inline int catindex_to_symbol(int pair)
+{
+    if (pair == 0)
+        return 0;
 
-    // Function to recover the coefficient from a "category/index" pair in JPEG
-    // format
-    inline int catindex_to_symbol(int pair) {
-        if (pair == 0) return 0;
+    // Extract the category and index from the "category/index" pair
+    int cat = pair & 0xf;
+    int index = pair >> 4;
 
-        // Extract the category and index from the "category/index" pair
-        int cat = pair & 0xf;
-        int index = pair >> 4;
+    // Calculate the minimum and maximum value in the given category
+    int minValue = (1 << (cat - 1));
+    int maxValue = (1 << cat) - 1;
 
-        // Calculate the minimum and maximum value in the given category
-        int minValue = (1 << (cat - 1));
-        int maxValue = (1 << cat) - 1;
+    // Calculate the index of the positive value within the given category
+    auto positive_index = 1 << (cat - 1);
 
-        // Calculate the index of the positive value within the given category
-        auto positive_index = 1 << (cat - 1);
+    // Recover the original coefficient
+    return (index < positive_index) ? -maxValue + index
+                                    : index - positive_index + minValue;
+}
 
-        // Recover the original coefficient
-        return (index < positive_index) ? -maxValue + index
-                                        : index - positive_index + minValue;
-    }
+// Function to recover the coefficient from a "category/index" pair in JPEG
+// format
+inline int catindex_to_symbol(int cat, int index)
+{
+    if (cat == 0)
+        return 0;
 
-    // Function to recover the coefficient from a "category/index" pair in JPEG
-    // format
-    inline int catindex_to_symbol(int cat, int index) {
-        if (cat == 0) return 0;
+    // Calculate the minimum and maximum value in the given category
+    int minValue = (1 << (cat - 1));
+    int maxValue = (1 << cat) - 1;
 
-        // Calculate the minimum and maximum value in the given category
-        int minValue = (1 << (cat - 1));
-        int maxValue = (1 << cat) - 1;
+    // Calculate the index of the positive value within the given category
+    auto positive_index = 1 << (cat - 1);
 
-        // Calculate the index of the positive value within the given category
-        auto positive_index = 1 << (cat - 1);
+    // Recover the original coefficient
+    return (index < positive_index) ? -maxValue + index
+                                    : index - positive_index + minValue;
+}
 
-        // Recover the original coefficient
-        return (index < positive_index) ? -maxValue + index
-                                        : index - positive_index + minValue;
-    }
+/* signed <-> unsigned */
+inline unsigned s2u(int v)
+{
+    const int uv = -2 * v - 1;
+    return (unsigned)(uv ^ (uv >> 31));
+}
 
+inline int u2s(unsigned uv)
+{
+    const int v = (int)(uv + 1U);
+    return v & 1 ? v >> 1 : -(v >> 1);
+}
+
+inline int ilog2_32(uint32_t v, int infinity_val = 1)
+{
+    if (v == 0)
+        return infinity_val;
+    return 32 - __builtin_clz(v);
+}

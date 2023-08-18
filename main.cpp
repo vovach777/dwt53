@@ -55,13 +55,8 @@ int main() {
     //auto data = make_envelope(32,32,1);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
-<<<<<<< HEAD
-    //auto data = make_gradient(512,512,0,128,128,255);
-    auto data = lenna;
-=======
     auto data = make_gradient(1024,1024,0,128,128,255);
     //auto data = lenna;
->>>>>>> 672c601e140178bc1d91838cdf454d59f4cd9833
      //auto data = make_sky(128,96);
      //auto data = make_random(512);
      //cubicBlur3x3(data);

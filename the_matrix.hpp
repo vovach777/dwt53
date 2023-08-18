@@ -486,7 +486,7 @@ inline the_matrix make_sky(int width, int height) {
           if (rand() % 4 == 0)
              v = 255;
          else
-            v =  y + x/4;
+            v =  (y + x/4) * 256 / (sz);
 
 
      } );

@@ -116,7 +116,7 @@ class BitReader {
      */
     inline unsigned int get_bits(int n) {
         // assert(n>0 && n<=25);
-        if (!(n > 0 && n <=25)) 
+        if (!(n > 0 && n <=25))
             throw std::out_of_range("assert(n>0 && n<=25)");
         if (index+n > size_in_bits) {
             throw std::out_of_range("(index+n > size_in_bits)!!!");
@@ -152,10 +152,10 @@ class BitReader {
         if (n <= 25)
             return get_bits(n);
 
-        
+
         unsigned ret = get_bits(16) << (n - 16);
         return ret | get_bits(n - 16);
-        
+
     }
 
   public:
@@ -164,6 +164,7 @@ class BitReader {
         buffer_end = buffer_ + buffer_size;
         index = 0;
     }
+    BitReader(const BitWriter& bw) : BitReader(bw.data(), bw.size(), bw.size_in_bits()) {  }
     BitReader() = default;
     inline bool readBit() {
         return get_bits1();

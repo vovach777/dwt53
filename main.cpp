@@ -63,7 +63,7 @@ int main() {
      // cubicBlur3x3(data);
 
     std::cout << "original: pw=" << matrix_energy(data) << std::endl;;
-    
+
     try {
     auto data_comp = huffman::compress(data);
     std::cout << "packed by huffman size = " << data_comp.size() << std::endl;

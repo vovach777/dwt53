@@ -80,7 +80,7 @@ namespace pack {
                 ///dest.writeBits(8, DHT[i].size());
                 vw.encode_golomb(3, DHT[i].size());
                 for (auto symbol : DHT[i]) {
-                    auto catindex = symbol_to_catindex(symbol);
+                    auto catindex = to_jpair(symbol);
                     dest.writeBits(4, catindex & 0xf);
                     if ( catindex > 0)
                         dest.writeBits(catindex & 0xf, catindex >> 4);
@@ -103,7 +103,7 @@ namespace pack {
                 for (auto& value : DHT[i]) {
                     auto cat = src.readBits(4);
                     auto index = cat == 0 ? 0 : src.readBits(cat);
-                    value = catindex_to_symbol(cat, index);
+                    value = from_jpair( make_jpair(cat, index) );
                     cout << value << ",";
                 }
                 cout << endl;

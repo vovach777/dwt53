@@ -1,5 +1,10 @@
 #pragma once
 
+#if defined(__has_builtin) && __has_builtin(__builtin_clz)
+    #define HAS_BUILTIN_CLZ
+#endif
+
+
 #include <algorithm>
 
 template <typename T>
@@ -52,72 +57,28 @@ Iterator find_nerest(Iterator begin, Iterator end, typename std::iterator_traits
     return lower_distance < upper_distance ? std::prev(it) : it;
 }
 
-// Function to convert a coefficient into a "category/index" pair in JPEG
-// format
-inline int symbol_to_catindex(int coeff)
+inline int make_jpair(int bitlen, int value) {
+    return bitlen | value << 4;
+}
+inline int to_jpair(int v)
 {
-    // If the coefficient is negative, we change its sign to positive
-    uint32_t positive = (coeff < 0) ? -coeff : coeff;
-    if (positive == 0)
+    if (v == 0)
         return 0;
-
-    // Calculate the category of the coefficient as the number of bits
-    // needed to represent its absolute value
-    int cat = 32 - __builtin_clz(positive);
-
-    // Calculate the minimum and maximum value in the given category
-    int minValue = (1 << (cat - 1));
-    int maxValue = (1 << cat) - 1;
-
-    // Calculate the index of the coefficient within the given category
-    auto index = (coeff < 0) ? maxValue + coeff
-                             : coeff - minValue + (maxValue - minValue + 1);
-
-    // Return the "category/index" pair in JPEG format
-    return cat | index << 4;
+    v = std::clamp(v, -32767, 32767);
+    int uv = abs(v);
+    int bitlen = 32 - __builtin_clz(uv);
+    const int base = 1 << (bitlen-1);
+    return make_jpair(bitlen, v < 0 ?  uv - base | base : uv - base);
 }
 
-// Function to recover the coefficient from a "category/index" pair in JPEG
-// format
-inline int catindex_to_symbol(int pair)
-{
-    if (pair == 0)
+inline int from_jpair( int jpair ) {
+    if (jpair == 0)
         return 0;
-
-    // Extract the category and index from the "category/index" pair
-    int cat = pair & 0xf;
-    int index = pair >> 4;
-
-    // Calculate the minimum and maximum value in the given category
-    int minValue = (1 << (cat - 1));
-    int maxValue = (1 << cat) - 1;
-
-    // Calculate the index of the positive value within the given category
-    auto positive_index = 1 << (cat - 1);
-
-    // Recover the original coefficient
-    return (index < positive_index) ? -maxValue + index
-                                    : index - positive_index + minValue;
+    int bitlen = jpair & 0xf;
+    const int base = 1 << (bitlen-1);
+    return (jpair & (base<<4)) ?  -(((jpair >> 4) & base-1) + base) : (((jpair >> 4) & base-1) + base);
 }
 
-// Function to recover the coefficient from a "category/index" pair in JPEG
-// format
-inline int catindex_to_symbol(int cat, int index)
-{
-    if (cat == 0)
-        return 0;
-
-    // Calculate the minimum and maximum value in the given category
-    int minValue = (1 << (cat - 1));
-    int maxValue = (1 << cat) - 1;
-
-    // Calculate the index of the positive value within the given category
-    auto positive_index = 1 << (cat - 1);
-
-    // Recover the original coefficient
-    return (index < positive_index) ? -maxValue + index
-                                    : index - positive_index + minValue;
-}
 
 /* signed <-> unsigned */
 inline unsigned s2u(int v)
@@ -136,5 +97,14 @@ inline int ilog2_32(uint32_t v, int infinity_val = 1)
 {
     if (v == 0)
         return infinity_val;
+#ifdef HAS_BUILTIN_CLZ
     return 32 - __builtin_clz(v);
+#else
+    int count = 0;
+    while (v) {
+        count++;
+        v >>= 1;
+    }
+    return count;
+#endif
 }

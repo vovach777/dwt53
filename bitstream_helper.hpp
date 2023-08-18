@@ -5,6 +5,13 @@ class ValueWriter {
     public:
     ValueWriter() = delete;
     ValueWriter(BitWriter &ref) : ref(ref) {};
+    ValueWriter(const ValueWriter & other): ref(other.ref) {};
+
+    ValueWriter& operator=(const ValueWriter& other) {
+        ref = other.ref;
+        return *this;
+    }
+
     void encode( int n, int value)
     {
         auto base = (1 << n)-1;
@@ -26,7 +33,7 @@ class ValueWriter {
     }
 
     void encode_golomb( unsigned k, unsigned value ) {
-     
+
         auto n_ = ilog2_32(value>>k,0);
         auto base = (1 << n_)-1;
         auto n = n_+1+k+n_;
@@ -62,7 +69,7 @@ class ValueReader {
         return v;
     }
 unsigned decode_golomb(unsigned k) {
-    
+
     while (ref.readBit()) ++k;
     return ref.readBits(k);
 }

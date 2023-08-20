@@ -57,6 +57,24 @@ Iterator find_nerest(Iterator begin, Iterator end, typename std::iterator_traits
     return lower_distance < upper_distance ? std::prev(it) : it;
 }
 
+
+inline int ilog2_32(uint32_t v, int infinity_val = 1)
+{
+    if (v == 0)
+        return infinity_val;
+#ifdef HAS_BUILTIN_CLZ
+    return 32 - __builtin_clz(v);
+#else
+    int count = 0;
+    while (v) {
+        count++;
+        v >>= 1;
+    }
+    return count;
+#endif
+}
+
+
 inline int make_jpair(int bitlen, int value) {
     return bitlen | value << 4;
 }
@@ -93,18 +111,22 @@ inline int u2s(unsigned uv)
     return v & 1 ? v >> 1 : -(v >> 1);
 }
 
-inline int ilog2_32(uint32_t v, int infinity_val = 1)
-{
-    if (v == 0)
-        return infinity_val;
-#ifdef HAS_BUILTIN_CLZ
-    return 32 - __builtin_clz(v);
-#else
-    int count = 0;
-    while (v) {
-        count++;
-        v >>= 1;
-    }
-    return count;
-#endif
-}
+/*
+    https://stackoverflow.com/a/49451507/1062758
+*/
+template<class T>class span {
+public:
+    inline span() : _data(0), _size(0) {}
+    inline span(T* d, size_t s) : _data(d), _size(s) {}
+    inline T& operator[](size_t index) { return _data[index]; }
+    inline const T& operator[](size_t index) const { return _data[index];}
+    inline size_t size() const { return _size; };
+    inline T* begin() { return _data; }
+    inline const T* begin() const { return _data; }
+
+    inline T* end() { return _data+_size; }
+    inline const T* end() const { return _data+_size; }
+protected:
+    T* _data;
+    size_t _size;
+};

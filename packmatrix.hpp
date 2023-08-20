@@ -3,11 +3,12 @@
 #include <iostream>
 #include <cstdint>
 #include <algorithm>
+#include <stdexcept>
 #include <vector>
 #include "the_matrix.hpp"
 #include "huffman.hpp"
 #include "utils.hpp"
-#include "dmc.hpp"
+#include "cabac265.hpp"
 #include "bitstream_helper.hpp"
 
 namespace pack {
@@ -47,59 +48,98 @@ inline the_matrix decompress(const std::vector<uint8_t>& compressed) {
 }
 }
 
-namespace DMC {
-inline std::vector<uint8_t> compress(const the_matrix& matrix) {
-    dmc enc;
-    BitWriter bw;
-    ValueWriter vw(bw);
-    vw.encode_golomb(8,matrix[0].size());
-    vw.encode_golomb(8,matrix.size());
-    int k = 0;
-    process_matrix(matrix, [&](int v){
-        vw.encode_golomb(k,s2u(v));
-        k = (k + ilog2_32(s2u(v),0)) / 2;
-    });
-    bw.flush();
-    BitReader br(bw);
-    while (br.bit_left()) {
-        enc.comp(br.readBit(), true);
+namespace CABAC {
+   
+    template<typename W>
+    class Compressor : public H265Writer<W> {
+        public:
+            Compressor(W& w) : H265Writer<W>(w) {};
+            inline void bit(int b,  uint8_t &state, bool bypass=false) {
+                if (bypass)
+                    H265Writer<W>::put_bypass(b);
+                else
+                    H265Writer<W>::put(b, state);
+            }
+            void bits(int n, int value, uint8_t &state, bool bypass=false) {
+                if (ilog2_32(value,1) > n)
+                    throw std::logic_error("value not fit in n-bits!");
+                
+                for (unsigned mask = 1 << (n-1); mask; mask >>= 1) {
+
+                    bit(value & mask, state,bypass);
+                }
+            }
+            void unary_jpair(int value) {
+                value = to_jpair(value);
+                const auto bitlen = value & 0xf;
+                for (int unary=bitlen;  unary; --unary) {
+                    bit(1,states[0]);
+                }
+                bit(0,states[0]);
+                if (bitlen)
+                   bits(bitlen, value >> 4,states[1]);
+            }
+            private:
+                uint8_t states[2] = {0,0};
+
+    };
+    template <typename R>
+    class Decompressor : public H265Reader<R> {
+        public:
+        Decompressor(R& r) : H265Reader<R>(r) {};
+        inline int bit(uint8_t& state, bool bypass = false) {      
+            return bypass ? H265Reader<R>::get_bypass() : H265Reader<R>::get(state);
+        }
+        int bits(int n, uint8_t& state, bool bypass=false) {
+            if (n < 1) 
+                throw std::logic_error("can not read less than 1-bit!");
+            int value=0;
+            while (n--) {
+                value = value + value + bit(state, bypass);
+            }
+            return value;
+        }
+        int unary_jpair() {
+            int bitlen = 0;
+            while (bit(states[0])) 
+                bitlen++;
+            if (bitlen == 0)
+                return 0;
+            return from_jpair( make_jpair( bitlen, bits(bitlen, states[1]) ) );
+        }
+        private:
+        uint8_t states[2] = {0,0};
+    };
+
+    inline std::vector<uint8_t> compress(const the_matrix& matrix) {
+        WriterVec vec;
+        Compressor enc(vec);
+
+ 
+        enc.unary_jpair(matrix[0].size());
+        enc.unary_jpair(matrix.size());
+    
+        process_matrix(matrix, [&](int v){
+            enc.unary_jpair(v);
+        });
+    
+        enc.finish();
+ 
+        return std::move(vec.get());
     }
-    enc.comp_eof();
-    std::cerr << "DMC nodes = " << enc.get_nodes_count() << std::endl;
-    return enc.get_encoded();
-}
 
 inline the_matrix decompress(const std::vector<uint8_t>& compressed) {
-    dmc dec;
-    auto it = compressed.begin();
-    BitWriter bw;
-    for(;;) {
-        auto bit = dec.exp(it,compressed.begin(), compressed.end(),true);
-        if (bit < 0) {
-            break;
-        }
-        bw.writeBit(bit);
-    }
-    bw.flush();
-    BitReader br(bw);
-    ValueReader vr(br);
-    auto width = vr.decode_golomb(8);
-    auto height = vr.decode_golomb(8);
-    int k = 0;
-    return make_matrix( width, height,
-    [&](int &v) {
-        if (br.bit_left() == 0)
-            {
-                v = 0;
-                return;
-            }
-        auto uv = vr.decode_golomb(k);
-        k = (k + ilog2_32(uv,0)) / 2;
-        v = u2s(uv);
-    }
-    );
+    ReaderIt vec(compressed.begin(), compressed.end());
+    Decompressor dec(vec);
+    auto width = dec.unary_jpair();
+    auto height = dec.unary_jpair();
+    return make_matrix(width, height, [&](int&v) {
+        v = dec.unary_jpair();
+    });
 }
+
 }
+
 
 
 

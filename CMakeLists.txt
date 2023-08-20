@@ -20,6 +20,6 @@ add_executable(example_compress_decompress
     quantization.hpp
     the_matrix.hpp
     utils.hpp
-    dmc.hpp
+    cabac265.hpp
 )
 

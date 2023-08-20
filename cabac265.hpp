@@ -113,7 +113,7 @@ const std::vector<uint8_t> RENORM_TABLE = {
     inline void update_mps(uint8_t &uc_state) {
         uc_state = NEXT_STATE_MPS[static_cast<size_t>(uc_state)];
     }
-    inline auto get_state(uint8_t &uc_state) {
+    inline auto get_state(uint8_t uc_state) {
         return static_cast<size_t>(uc_state >> 1);
     }
 

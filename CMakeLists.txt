@@ -21,5 +21,6 @@ add_executable(example_compress_decompress
     the_matrix.hpp
     utils.hpp
     dmc.hpp
+    get_bits_cached.hpp
 )
 

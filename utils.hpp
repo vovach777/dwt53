@@ -108,3 +108,45 @@ inline int ilog2_32(uint32_t v, int infinity_val = 1)
     return count;
 #endif
 }
+
+#include <iostream>
+#include <type_traits>
+
+template <typename Container>
+typename std::enable_if<std::is_same<typename Container::value_type, int>::value, std::ostream&>::type
+operator<<(std::ostream& o, const Container& a) {
+    for (auto v : a)
+        o << v << " ";
+    return o;
+}
+
+template <typename Container>
+typename std::enable_if<std::is_same<typename Container::value_type, uint8_t>::value, std::ostream&>::type
+operator<<(std::ostream& o, const Container& a) {
+    for (auto v : a)
+        o << static_cast<int>(v) <<  " ";
+    return o;
+}
+
+template <typename Iterator, typename = std::enable_if_t<std::is_same_v<typename std::iterator_traits<Iterator>::value_type, uint8_t>>>
+class Reader {
+    // Ограничение на итераторы, указывающие на тип uint8_t:
+    // This code is constrained to iterators pointing to elements of type uint8_t.
+    // It will fail to compile if the iterator's value type is not uint8_t.
+public:
+    Reader(Iterator begin, Iterator end) : beginIt(begin), endIt(end) {}
+
+    uint8_t read_u8() {
+        if (beginIt == endIt) {
+            throw std::range_error("End of data reached");
+        }
+        return *(beginIt++);
+    }
+
+private:
+    Iterator beginIt;
+    Iterator endIt;
+};
+
+
+

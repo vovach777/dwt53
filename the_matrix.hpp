@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <cassert>
 #include <cstdint>
+#include <random>
 #include "utils.hpp"
 
 
@@ -529,5 +530,32 @@ inline std::vector<int> flatten(const the_matrix & matrix)
     return vec;
 }
 
+the_matrix make_probability(int width=32, int height=32, double probability=0.5, int value=1) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    std::bernoulli_distribution dist(probability);
+
+    return make_matrix(width, height, [&](int&v) {
+        v = dist(gen) * value;
+    });
+
+}
+
+bool matrix_is_equal(const the_matrix &a, const the_matrix &b ) {
+    if (a.size() == 0 || b.size() == 0)
+        return a.size() == b.size();
+
+    if (a.size() != b.size() || a[0].size() != b[0].size() )
+        return false;
+    for (int y=0;y<a.size(); ++y)
+    for (int x=0;x<a[y].size(); ++x)
+    {
+        if (a[y][x] != b[y][x]) {
+            return false;
+        }
+    }
+    return true;
+}
 
 #endif

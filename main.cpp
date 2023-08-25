@@ -48,6 +48,44 @@ the_matrix lenna = {
     {73, 164, 159, 162, 51, 58, 65, 79, 75, 72, 63, 69, 113, 128, 131, 135, 140, 145, 146, 147, 158, 175, 206, 182, 92, 123, 114, 96, 83, 100, 89, 59, },
 };
 
+template <typename V, typename S>
+void test(V && data, S && description ) {
+    std::cout << "** PACK " << description << " **\nteoretic size=\t" << matrix_energy(data) << std::endl;
+    std::cout << "huffman size=\t" << huffman::compress(data).size() << std::endl;
+    std::cout << "DMC size=\t"     << DMC::compress(data).size()     << std::endl;
+    std::cout << "H265 size=\t"    << CABAC::compress(data).size()   << std::endl;
+    std::cout << std::endl;
+
+    test_compress_decompress(data);
+
+}
+
+template <typename V>
+void test_compress_decompress(V && data ) {
+    std::cout << "huffman decompression:\t";
+    try {
+       std::cout << (matrix_is_equal(  huffman::decompress( huffman::compress(data) ), data) ? "Passed!"  :  "FAIL!!!") << std::endl;
+    } catch(const std::exception & e) {
+        std::cout << "EXCEPTION \"" <<  e.what() << "\"" << std::endl;
+    }
+
+    std::cout << "DMC decompression:\t";
+    try {
+       std::cout << (matrix_is_equal(  DMC::decompress( DMC::compress(data) ), data) ? "Passed!"  :  "FAIL!!!") << std::endl;
+    } catch(const std::exception & e) {
+        std::cout << "EXCEPTION \"" <<  e.what() << "\"" << std::endl;
+    }
+
+    std::cout << "H265 decompression:\t";
+    try {
+       std::cout << (matrix_is_equal(  CABAC::decompress( CABAC::compress(data) ), data) ? "Passed!"  :  "FAIL!!!") << std::endl;
+    } catch(const std::exception & e) {
+        std::cout << "EXCEPTION \"" <<  e.what() << "\"" << std::endl;
+    }
+
+}
+
+
 
 int main() {
     int max_levels = 5;
@@ -55,67 +93,110 @@ int main() {
     //auto data = make_envelope(32,32,1);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
-    auto data = make_gradient(1024,1024,0,128,128,255);
+    //auto data = make_gradient(1024,1024,0,128,128,255);
     //auto data = lenna;
      //auto data = make_sky(128,96);
      //auto data = make_random(512);
      //cubicBlur3x3(data);
      // cubicBlur3x3(data);
+     auto data = make_probability(8,8,0.1,100);
 
-    std::cout << "original: pw=" << matrix_energy(data) << std::endl;;
+     std::cout << data;
 
-    try {
-    auto data_comp = huffman::compress(data);
-    std::cout << "packed by huffman size = " << data_comp.size() << std::endl;
-    auto data_comp2 = DMC::compress(data);
-      std::cout << "packed by DMC size = " << data_comp2.size() << std::endl;
-   // std::cout << "data unpacked:" << std::endl;
+    std::vector<int> test_bits_data;
+    BitWriter bw;
+
+    for (int i = 0; i < 100000; i++ ) {
+        int bits = (rand() & 31) + 1;
+        int value = rand() & ((1 << bits)-1);
+        test_bits_data.push_back(bits);
+        test_bits_data.push_back(value);
+        if (bits == 1)
+            bw.writeBit(value);
+        else
+            bw.writeBits(bits,value);
     }
-    catch(std::exception &e){
-        std::cout << "original pack fail: " << e.what() << std::endl;
-    }
-    // auto data_decomp = huffman::decompress(data_comp);
-    // std::cout <<  data_decomp;
+    bw.flush();
 
-
-    dwt2d::Transform codec;
-    codec.prepare_transform(max_levels, wavelet, data);
-    auto& haar_data = codec.forward();
-
-    // std::cout << raster(haar_data);
-    std::cout << "transformed: pw=" << matrix_energy(haar_data) << std::endl;
-
-
-    auto haar_data_comp = huffman::compress(haar_data);
-    std::cout << "packed by huffman size = " << haar_data_comp.size() << std::endl;
-    haar_data_comp = DMC::compress(haar_data);
-     std::cout << "packed by DMC size = " << haar_data_comp.size() << std::endl;
-
-    codec.quantization(1);
-    std::cout << "quantized: pw=" << matrix_energy(haar_data) <<  std::endl;
-
-
-    auto haar_data_vq_comp = huffman::compress(haar_data);
-    // std::cout << "hufman-codes:";
-    // for (auto v : haar_data_vq_comp )
-    //     std::cout << static_cast<int>(v) << " ";
-    std::cout << "packed by huffman size = " << haar_data_vq_comp.size() << std::endl;
-    haar_data_vq_comp = DMC::compress(haar_data);
-     std::cout << "packed by DMC size = " << haar_data_vq_comp.size() << std::endl;
-    auto haar_data_vq_exp = DMC::decompress(haar_data_vq_comp);
-    for (int y=0; y < haar_data_vq_exp.size();y++)
-    for (int x=0; x < haar_data_vq_exp[y].size();x++) {
-        if (haar_data_vq_exp[y][x] != haar_data[y][x]) {
-              std::cout << "DMC fail!" << std::endl;
-              abort();
+    BitReader br(bw);
+    bool test_failed = false;
+    for (int i = 0; i < 100000; i++ ) {
+        int bits = test_bits_data[i*2];
+        int value = test_bits_data[i*2+1];
+        if ( bits == 1) {
+            if ( br.readBit() != value)
+                {
+                    std::cerr << "test failed at " << i << std::endl;
+                    test_failed = true;
+                    break;
+                }
         }
+        if (br.readBits(bits) != value)
+                {
+                    std::cerr << "test failed at " << i << std::endl;
+                    test_failed = true;
+                    break;
+                }
+
     }
+
+    if (! test_failed) {
+        std::cout << "test passed!" << std::endl;
+    }
+
+    //std::cout << "decoded ints (" <<  values.size() << ")" <<  std::endl << values << std::endl;
+
+
+    // test(data,"original");
+
+    // dwt2d::Transform codec;
+    // codec.prepare_transform(max_levels, wavelet, data);
+    // auto& haar_data = codec.forward();
+
+    // test(haar_data, "wavelet coefficients");
+
+    // codec.quantization(1);
+
+    // test(haar_data, "wavelet coefficients + quantization" );
+
+
+    // auto haar_data2 = huffman::decompress( huffman::compress(haar_data) );
+
+    // for (int y=0; y < haar_data2.size();y++)
+    // for (int x=0; x < haar_data2[y].size();x++) {
+    //     if (haar_data2[y][x] != haar_data[y][x]) {
+    //           std::cout << "DMC fail!" << std::endl;
+    //           abort();
+    //     }
+    // }
     // std::cout << haar_data;
-    auto& reconstructed = codec.inverse();
+    // auto& reconstructed = codec.inverse();
 
 
 
-    std::cout << "psnr=" << psnr(data, reconstructed) << std::endl;
+    // std::cout << "psnr=" << psnr(data, reconstructed) << std::endl;
 
+
+    // auto enc = Compressor(DMC_compressor());
+    // enc.bit_bypass(1);
+    // enc.bit_bypass(0);
+    // auto encoded = enc.finish();
+    // std::cout << encoded << std::endl;
+    // auto dec  = Decompressor(DMC_decompressor(encoded.data(),encoded.size()*8 ));
+    // auto bit1 = dec.bit_bypass();
+    // auto bit2 = dec.bit_bypass();
+    // auto bit3 = dec.bit_bypass();
+    // std::cout << bit1 << " " << bit2 << " " << bit3 << std::endl;
+
+    // auto test_bw = BitWriter();
+    // test_bw.writeBit(1);
+    // test_bw.writeBit(0);
+    // test_bw.writeBits(32,0);
+    // test_bw.writeBits(32,0);
+    // auto vec = test_bw.get_all_bytes();
+    // auto test_br = BitReader( vec.data(), vec.size()*8 );
+    // auto bit1 = test_br.readBit();
+    // auto bit2 = test_br.readBit();
+    // std::cout << bit1 << " " << bit2 << std::endl;
 
 }

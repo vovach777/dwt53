@@ -25,11 +25,11 @@ class BitWriter {
 
     std::vector<uint8_t> get_current_bytes() {
 
-        std::vector<uint8_t> bytes(4096,0);
+        std::vector<uint8_t> bytes(8,0);
         std::swap(bytes, pb.bytes);
         bytes.resize(pb.put_bytes_output());
         pb.buf_ptr = pb.buf = pb.bytes.data();
-        pb.buf_end = pb.buf + 4096;
+        pb.buf_end = pb.buf + pb.bytes.size();
         return bytes;
 
     }

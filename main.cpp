@@ -106,25 +106,31 @@ int main() {
     std::vector<uint32_t> test_bits_data;
     BitWriter bw;
 
-    for (int i = 0; i < 1000; i++ ) {
+    constexpr size_t test_bits_max  = 8000000;
 
-        uint32_t value = rand()*rand()*rand();
+    for (size_t i = 0; i < test_bits_max; i++ ) {
+
+        uint32_t value = rand()*0x55555555 + rand();
         uint32_t bits = ilog2_32(value,1);
         test_bits_data.push_back(bits);
         test_bits_data.push_back(value);
-        if (value < 2)
+        if (bits == 1)
             bw.writeBit(value);
         else
             bw.writeBits(bits,value);
-    }
-    bw.flush();
-    //std::cout << bw << std::endl;
 
-    BitReader br(bw);
+    }
+
+
+    auto bin = bw.get_all_bytes();
+    BitReader br(bin.data(), bin.size()*8);
+
+    std::cout << br.bits_size() << std::endl;
     bool test_failed = false;
-    for (int i = 0; i < 1000; i++ ) {
-        int bits = test_bits_data[i*2];
-        int value = test_bits_data[i*2+1];
+    for (size_t i = 0; i < test_bits_max; i++ ) {
+    auto bits = test_bits_data[i*2];
+    auto value = test_bits_data[i*2+1];
+
         if ( bits == 1) {
             if ( br.readBit() != value)
                 {
@@ -133,12 +139,14 @@ int main() {
                     break;
                 }
         }
-        if (br.readBits(bits) != value)
+        else {
+            if (br.readBits(bits) != value)
                 {
                     std::cerr << "test failed at " << i << std::endl;
                     test_failed = true;
                     break;
                 }
+        }
 
     }
 

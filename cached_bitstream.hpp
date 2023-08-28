@@ -3,6 +3,7 @@
 #include <climits>
 #include <stdexcept>
 #include <vector>
+#include <algorithm>
 #include "utils.hpp"
 
 namespace ffmpeg {
@@ -13,8 +14,8 @@ struct BitstreamContextBE {
     uint64_t bits = 0; // stores bits read from the buffer
     const uint8_t *buffer = nullptr, *buffer_end = nullptr;
     const uint8_t *ptr = nullptr; // pointer to the position inside a buffer
-    unsigned bits_valid = 0; // number of bits left in bits field
-    unsigned size_in_bits = 0;
+    int bits_valid = 0; // number of bits left in bits field
+    int64_t size_in_bits = 0;
 
 /**
 
@@ -78,12 +79,9 @@ inline int bits_priv_refill_32_be()
 BitstreamContextBE() = default;
 
 
-BitstreamContextBE(const uint8_t *buffer,  unsigned int bit_size)
+BitstreamContextBE(const uint8_t *buffer,  int64_t bit_size)
 {
-    unsigned int buffer_size;
-    if (bit_size > INT_MAX - 7 || !buffer) {
-        throw std::length_error("Invalid data found when processing input");
-    }
+    size_t buffer_size;
     buffer_size = (bit_size + 7) >> 3;
     buffer = buffer;
     buffer_end = buffer + buffer_size;
@@ -91,6 +89,11 @@ BitstreamContextBE(const uint8_t *buffer,  unsigned int bit_size)
     size_in_bits = bit_size;
     bits_valid = 0;
     bits = 0;
+
+    if (buffer_end < ptr) {
+        throw std::length_error("Invalid data found when processing input");
+    }
+
     bits_priv_refill_64_be();
 }
 /**
@@ -98,7 +101,7 @@ BitstreamContextBE(const uint8_t *buffer,  unsigned int bit_size)
  * Return number of bits already read.
 
  */
-inline int bits_tell_be()
+inline auto bits_tell_be()
 {
     return (ptr - buffer) * 8 - bits_valid;
 }
@@ -107,7 +110,7 @@ inline int bits_tell_be()
  * Return buffer size in bits.
 
  */
-inline int bits_size_be()
+inline auto bits_size_be()
 {
     return size_in_bits;
 }
@@ -116,7 +119,7 @@ inline int bits_size_be()
  * Return the number of the bits left in a buffer.
 
  */
-inline int bits_left_be()
+inline auto bits_left_be()
 {
     return (buffer - ptr) * 8 + size_in_bits + bits_valid;
 }
@@ -357,7 +360,7 @@ struct PutBitContext {
  * @param buffer the buffer where to put bits
  * @param buffer_size the size in bytes of buffer
  */
-PutBitContext() : bytes(4096,0)
+PutBitContext() : bytes(8,0)
 {
 
     auto buffer = bytes.data();
@@ -376,7 +379,7 @@ PutBitContext() : bytes(4096,0)
 /**
  * @return the total number of bits written to the bitstream.
  */
-inline int put_bits_count() const
+inline auto put_bits_count() const
 {
     return (buf_ptr - buf) * 8 + BUF_BITS - bit_left;
 }
@@ -384,7 +387,7 @@ inline int put_bits_count() const
  * @return the number of bytes output so far; may only be called
  *         when the PutBitContext is freshly initialized or flushed.
  */
-inline int put_bytes_output() const
+inline auto put_bytes_output() const
 {
     return buf_ptr - buf;
 }
@@ -393,7 +396,7 @@ inline int put_bytes_output() const
  *                   rounded up to the next byte.
  * @return the number of bytes output so far.
  */
-inline int put_bytes_count(int round_up=true) const
+inline auto put_bytes_count(int round_up=true) const
 {
     return buf_ptr - buf + ((BUF_BITS - bit_left + (round_up ? 7 : 0)) >> 3);
 }
@@ -417,7 +420,7 @@ inline void rebase_put_bits(uint8_t *buffer,
 /**
  * @return the number of bits available in the bitstream.
  */
-inline int put_bits_left()
+inline auto put_bits_left()
 {
     return (buf_end - buf_ptr) * 8 - BUF_BITS + bit_left;
 }
@@ -426,7 +429,7 @@ inline int put_bits_left()
  *                   rounded up to the next byte.
  * @return the number of bytes left.
  */
-inline int put_bytes_left(int round_up)
+inline auto put_bytes_left(int round_up)
 {
     return buf_end - buf_ptr - ((BUF_BITS - bit_left + (round_up ? 7 : 0)) >> 3);
 }
@@ -440,7 +443,7 @@ inline void flush_put_bits()
     while (bit_left < BUF_BITS) {
         if (!(buf_ptr < buf_end)) {
            //throw std::length_error("s->buf_ptr < s->buf_end");
-           bytes.resize( bytes.size() + 4096 );
+           bytes.resize(  std::max<size_t>(8, bytes.size() * 2 ) );
            rebase_put_bits(bytes.data(), bytes.size());
         }
         *buf_ptr++ = bit_buf >> (BUF_BITS - 8);

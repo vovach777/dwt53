@@ -3,65 +3,10 @@
 #include <climits>
 #include <stdexcept>
 #include <vector>
+#include "utils.hpp"
 
 namespace ffmpeg {
 
-/*
-
- * Define AV_[RW]N helper macros to simplify definitions not provided
-
- * by per-arch headers.
-
- */
-union unaligned_64 { uint64_t l; } __attribute__((packed)) __attribute__((may_alias));
-union unaligned_32 { uint32_t l; } __attribute__((packed)) __attribute__((may_alias));
-union unaligned_16 { uint16_t l; } __attribute__((packed)) __attribute__((may_alias));
-
-/**
- * Clear high bits from an unsigned integer starting with specific bit position
- * @param  a value to clip
- * @param  p bit position to clip at
- * @return clipped value
- */
-static __attribute__((always_inline))  __attribute__((const)) unsigned av_mod_uintp2_c(unsigned a, unsigned p)
-{
-    return a & ((1U << p) - 1);
-}
-
-inline __attribute__((const)) int sign_extend(int val, unsigned bits)
-{
-    unsigned shift = 8 * sizeof(int) - bits;
-    union { unsigned u; int s; } v = { (unsigned) val << shift };
-    return v.s >> shift;
-}
-inline __attribute__((const)) int64_t sign_extend64(int64_t val, unsigned bits)
-{
-    unsigned shift = 8 * sizeof(int64_t) - bits;
-    union { uint64_t u; int64_t s; } v = { (uint64_t) val << shift };
-    return v.s >> shift;
-}
-inline __attribute__((const)) unsigned zero_extend(unsigned val, unsigned bits)
-{
-    return (val << ((8 * sizeof(int)) - bits)) >> ((8 * sizeof(int)) - bits);
-}
-
-
-
-inline __attribute__((always_inline)) __attribute__((const)) uint16_t av_bswap16(uint16_t x)
-{
-    x= (x>>8) | (x<<8);
-    return x;
-}
-
-inline __attribute__((always_inline)) __attribute__((const)) uint32_t av_bswap32(uint32_t x)
-{
-    return ((((x) << 8 & 0xff00) | ((x) >> 8 & 0x00ff)) << 16 | ((((x) >> 16) << 8 & 0xff00) | (((x) >> 16) >> 8 & 0x00ff)));
-}
-
-inline uint64_t __attribute__((const)) av_bswap64(uint64_t x)
-{
-    return (uint64_t)av_bswap32(x) << 32 | av_bswap32(x >> 32);
-}
 
 
 struct BitstreamContextBE {
@@ -488,7 +433,7 @@ inline int put_bytes_left(int round_up)
 /**
  * Pad the end of the output stream with zeros.
  */
-inline void flush_put_bits(bool update = true)
+inline void flush_put_bits()
 {
     if (bit_left < BUF_BITS)
         bit_buf <<= bit_left;
@@ -502,10 +447,8 @@ inline void flush_put_bits(bool update = true)
         bit_buf <<= 8;
         bit_left += 8;
     }
-    if (update) {
-        bit_left = BUF_BITS;
-        bit_buf = 0;
-    }
+    bit_left = BUF_BITS;
+    bit_buf = 0;
 }
 inline void flush_put_bits_le()
 {

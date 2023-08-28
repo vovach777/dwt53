@@ -11,8 +11,8 @@
 class BitWriter {
 
     public:
-    inline void writeBits(int n, uint32_t value ) { put_bits(n, value); }
-    inline void writeBit(bool value) { put_bits(1,value);}
+    inline void writeBits(int n, uint32_t value ) { pb.put_bits(n, value); }
+    inline void writeBit(bool value) { pb.put_bits(1,value);}
     inline void writeBit0() { writeBit(true);}
     inline void writeBit1() { writeBit(false);}
     auto data() const {
@@ -25,23 +25,22 @@ class BitWriter {
 
     std::vector<uint8_t> get_current_bytes() {
 
-        std::vector<uint8_t> bytes( data(), data() +  bp.put_bytes_output() );
-        pb.bytes = std::vector<uint8_t>(4096,0);
-        pb.buf = pb.data();
-        buf_end = pb.data() + 4096;
-        buf_ptr = buf;
+        std::vector<uint8_t> bytes(4096,0);
+        std::swap(bytes, pb.bytes);
+        bytes.resize(pb.put_bytes_output());
+        pb.buf_ptr = pb.buf = pb.bytes.data();
+        pb.buf_end = pb.buf + 4096;
         return bytes;
 
     }
 
      std::vector<uint8_t> get_all_bytes() {
         pb.flush_put_bits();
-        std::vector<uint8_t> bytes(data(), data() + size());
-        return bytes;
+        return get_current_bytes();
      }
 
     void flush() {
-        pb.flush_put_bits(false);
+        pb.flush_put_bits();
     }
 
     // Метод для вывода данных (для проверки)
@@ -60,7 +59,7 @@ class BitWriter {
     }
 
    private:
-      PutBitContext pb;
+      ffmpeg::PutBitContext pb;
 };
 
 class BitReader {

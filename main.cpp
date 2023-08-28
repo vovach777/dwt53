@@ -95,7 +95,7 @@ int main() {
     // cubicBlur3x3(data);
     //auto data = make_gradient(1024,1024,0,128,128,255);
     //auto data = lenna;
-     auto data = make_sky(1920,1080);
+     //auto data = make_sky(1920,1080);
      //auto data = make_random(512);
      //cubicBlur3x3(data);
      // cubicBlur3x3(data);
@@ -103,24 +103,26 @@ int main() {
 
      std::cout << data;
 
-    std::vector<int> test_bits_data;
+    std::vector<uint32_t> test_bits_data;
     BitWriter bw;
 
-    for (int i = 0; i < 100000; i++ ) {
-        int bits = (rand() & 31) + 1;
-        int value = rand() & ((1 << bits)-1);
+    for (int i = 0; i < 1000; i++ ) {
+
+        uint32_t value = rand()*rand()*rand();
+        uint32_t bits = ilog2_32(value,1);
         test_bits_data.push_back(bits);
         test_bits_data.push_back(value);
-        if (bits == 1)
+        if (value < 2)
             bw.writeBit(value);
         else
             bw.writeBits(bits,value);
     }
     bw.flush();
+    //std::cout << bw << std::endl;
 
     BitReader br(bw);
     bool test_failed = false;
-    for (int i = 0; i < 100000; i++ ) {
+    for (int i = 0; i < 1000; i++ ) {
         int bits = test_bits_data[i*2];
         int value = test_bits_data[i*2+1];
         if ( bits == 1) {

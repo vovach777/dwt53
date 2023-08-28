@@ -6,71 +6,41 @@
 #include <stdexcept>
 #include <limits>
 #include "utils.hpp"
+#include "cached_bitstream.hpp"
 
 class BitWriter {
 
-    inline void put_bits(int n, uint32_t value) {
-    if (n == 0)
-        throw std::out_of_range("n == 0, can not write 0 bits");
-    if ( ilog2_32(value,1) > n) {
-        std::cerr << std::endl << "bits = " << n << ", value = " << value << std::endl;
-        throw std::out_of_range("value out of n-bits !!!");
-    }
-
-    auto bit_left = bit_left_;
-    auto bit_buf  = bit_buf_;
-    //allways reserve
-    if (vec.size() <= size_) {
-        vec.resize(size_+1);
-    }
-
-    if (n < bit_left) {
-        bit_buf     = (bit_buf << n) | value;
-        bit_left   -= n;
-    } else {
-        bit_buf   <<= bit_left;
-        bit_buf    |= value >> (n - bit_left);
-        vec[size_++] = __builtin_bswap32(bit_buf);
-        bit_left   += 32 - n;
-        bit_buf     = value;
-    }
-    bit_buf_  = bit_buf;
-    bit_left_ = bit_left;
-    }
-
     public:
-    inline void writeBits(int n, uint32_t value ) { put_bits(n, value); }
-    inline void writeBit(bool value) { put_bits(1,value);}
+    inline void writeBits(int n, uint32_t value ) { pb.put_bits(n, value); }
+    inline void writeBit(bool value) { pb.put_bits(1,value);}
     inline void writeBit0() { writeBit(true);}
     inline void writeBit1() { writeBit(false);}
     auto data() const {
-        return  reinterpret_cast<const uint8_t*>( vec.data());
+        return  pb.buf;
     }
-    auto data() {
-        return  reinterpret_cast<uint8_t*>( vec.data());
-    }
-    auto size_in_bits() const { return size_*32 + (32-bit_left_); }
+    auto size_in_bits() const { return pb.put_bits_count(); }
     auto size() const {
-       return (size_in_bits() + 7) >> 3;
+       return pb.put_bytes_count();
         }
 
+    std::vector<uint8_t> get_current_bytes() {
+
+        std::vector<uint8_t> bytes(8,0);
+        std::swap(bytes, pb.bytes);
+        bytes.resize(pb.put_bytes_output());
+        pb.buf_ptr = pb.buf = pb.bytes.data();
+        pb.buf_end = pb.buf + pb.bytes.size();
+        return bytes;
+
+    }
+
+     std::vector<uint8_t> get_all_bytes() {
+        pb.flush_put_bits();
+        return get_current_bytes();
+     }
+
     void flush() {
-        if (bit_left_ == 32)
-            return;
-        if (vec.size() <= size_) {
-            vec.resize(size_+1);
-        }
-        vec[size_] = 0;
-        auto byte_by_byte = reinterpret_cast<uint8_t*>( &vec[size_] );
-        auto bit_left = bit_left_;
-        auto bit_buf = bit_buf_;
-        if (bit_left < 32)
-            bit_buf <<= bit_left;
-        while (bit_left < 32) {
-            *byte_by_byte++ = bit_buf >> (32 - 8);
-            bit_buf  <<= 8;
-            bit_left  += 8;
-        }
+        pb.flush_put_bits();
     }
 
     // Метод для вывода данных (для проверки)
@@ -89,96 +59,40 @@ class BitWriter {
     }
 
    private:
-    std::vector<uint32_t> vec;
-    uint32_t bit_buf_ = 0;  // буфер для хранения битов
-    int bit_left_ = 32;  // счетчик битов в буфере
-    std::vector<uint32_t>::size_type size_=0; //current vector tail
+      ffmpeg::PutBitContext pb;
 };
 
 class BitReader {
-
-
-    inline unsigned int get_bits1() {
-        size_t _index = index;
-        if (index >= size_in_bits) {
-            throw std::out_of_range("(index >= size_in_bits)!!!");
-        }
-        uint8_t result = buffer[_index >> 3];
-        result <<= _index & 7;
-        result >>= 8 - 1;
-        _index++;
-        index = _index;
-        return result;
-    }
-
-    /**
-     * Read 1-25 bits.
-     */
-    inline unsigned int get_bits(int n) {
-        // assert(n>0 && n<=25);
-        if (!(n > 0 && n <=25))
-            throw std::out_of_range("assert(n>0 && n<=25)");
-        if (index+n > size_in_bits) {
-            throw std::out_of_range("(index+n > size_in_bits)!!!");
-        }
-        union unaligned_32 {
-            uint32_t l;
-        } __attribute__((packed)) __attribute__((may_alias));
-        unsigned int tmp;
-        unsigned int re_index = index;
-        unsigned int re_cache;
-        re_cache =
-            __builtin_bswap32(
-                ((const union unaligned_32 *)(buffer + (re_index >> 3)))->l)
-            << (re_index & 7);
-        tmp = (((uint32_t)(re_cache)) >> (32 - n));
-        re_index += n;
-        index = re_index;
-        return tmp;
-    }
-
-    /**
-     * Read 0-32 bits.
-     */
-
-    inline unsigned int get_bits_long(int n) {
-        // assert(n>=0 && n<=32);
-        if (n==0)
-            return 0;
-
-        if (n==1)
-            return get_bits1();
-
-        if (n <= 25)
-            return get_bits(n);
-
-
-        unsigned ret = get_bits(16) << (n - 16);
-        return ret | get_bits(n - 16);
-
-    }
-
   public:
-    BitReader(const uint8_t *buffer_, size_t buffer_size, size_t limit_bits=std::numeric_limits<size_t>::max()) : size_in_bits(std::min(buffer_size << 3,limit_bits)) {
-        buffer_begin = buffer = buffer_;
-        buffer_end = buffer_ + buffer_size;
-        index = 0;
-    }
-    BitReader(const BitWriter& bw) : BitReader(bw.data(), bw.size(), bw.size_in_bits()) {  }
+    BitReader(const uint8_t *buffer, unsigned int bit_size) : bc(buffer, bit_size) {}
+    BitReader(const BitWriter& bw) : BitReader(bw.data(), bw.size_in_bits()) {  }
     BitReader() = default;
     inline bool readBit() {
-        return get_bits1();
+        return bc.bits_read_bit_be();
     }
-    inline auto readBits(int n) {
-        return get_bits_long(n);
+    inline auto readBits(unsigned int n) {
+        return bc.bits_read_be(n);
     }
-    // BitReader& operator=(BitReader&& other) {
+    inline ptrdiff_t left() {
+        return bc.bits_left_be();
+    }
+    /**
+     * Return buffer size in bits.
+     */
+    inline size_t bits_size() const
+    {
+        return bc.size_in_bits;
+    }
 
-    // }
+    inline void check_overread() {
+        if ( left() < 0)
+            throw std::range_error("out of buffer read!!!");
+    }
+
     // Метод для вывода данных (для проверки)
     void printBits(std::ostream & o) const {
-        auto count  = size_in_bits;
-        for (auto it = buffer_begin; it != buffer_end; ++it) {
+        auto count  = bits_size();
+        for (auto it = bc.buffer; it != bc.buffer_end; ++it) {
             auto byte = *it;
             for (int i = 7; i >= 0; --i) {
                 if (count-- == 0)
@@ -190,17 +104,11 @@ class BitReader {
        // o << "\n";
     }
 
-    size_t get_index() { return index; }
-    //size_t size_in_bits() { return size_in_bits; }
-    size_t bit_left() { return size_in_bits - index; }
+    private:
+    ffmpeg::BitstreamContextBE bc;
 
-   private:
-    const uint8_t *buffer_begin;
-    const uint8_t *buffer;
-    const uint8_t *buffer_end;
-    size_t index;
-    size_t size_in_bits;
 };
+
 
 inline std::ostream& operator<<(std::ostream& o, BitWriter const & a) {
     a.printBits(o);

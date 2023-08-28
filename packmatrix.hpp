@@ -3,15 +3,119 @@
 #include <iostream>
 #include <cstdint>
 #include <algorithm>
-#include <stdexcept>
-#include <vector>
+#include <utility>
 #include "the_matrix.hpp"
 #include "huffman.hpp"
 #include "utils.hpp"
-#include "cabac265.hpp"
+#include "dmc.hpp"
+#include "cabacH265.hpp"
 #include "bitstream_helper.hpp"
 
 namespace pack {
+
+
+
+    template <typename Base>
+    class Compressor {
+        using State = typename Base::StateType;
+        public:
+            Compressor(Base & encoder) : encoder(encoder), stateBitSize(Base::defaultState()), stateValue(Base::defaultState()) {};
+            inline void bit(bool b,State &state) {
+                encoder.put(b, state);
+            }
+            inline void bit_bypass(bool b) {
+                encoder.put_bypass(b);
+            }
+
+            void bits(int n, int value, State &state) {
+                if (ilog2_32(value,1) > n)
+                    throw std::logic_error("value not fit in n-bits!");
+
+                for (unsigned mask = 1 << (n-1); mask; mask >>= 1) {
+
+                    bit(value & mask, state);
+                }
+            }
+            void bits_bypass(int n, int value) {
+                if (ilog2_32(value,1) > n)
+                    throw std::logic_error("value not fit in n-bits!");
+
+                for (unsigned mask = 1 << (n-1); mask; mask >>= 1) {
+
+                    bit_bypass(value & mask);
+                }
+            }
+
+            void unary_jpair(int value) {
+                value = to_jpair(value);
+                const auto bitlen = value & 0xf;
+                for (int unary=bitlen;  unary; --unary) {
+                    bit(1,stateBitSize);
+                }
+                bit(0,stateBitSize);
+                if (bitlen)
+                   bits(bitlen, value >> 4,stateValue);
+            }
+            auto finish() {
+                return encoder.finish();
+            }
+            private:
+                Base& encoder;
+                State stateBitSize;
+                State stateValue;
+    };
+
+
+    template<typename Base>
+    class Decompressor {
+        using State = typename Base::StateType;
+        public:
+        Decompressor(Base & decoder) : decoder(decoder), stateBitSize(Base::defaultState()), stateValue(Base::defaultState()) {};
+
+        inline auto bit_bypass() {
+            return decoder.get_bypass();
+        }
+
+        inline auto bit(State& state) {
+            return decoder.get(state);
+        }
+
+        int bits_bypass(int n) {
+            if (n < 1)
+                throw std::logic_error("can not read less than 1-bit!");
+            int value=0;
+            while (n--) {
+                auto bit = bit_bypass();
+                if (bit > 1)
+                    throw std::logic_error("special symbol detected!");
+                value = value + value + bit_bypass();
+            }
+            return value;
+        }
+
+        int bits(int n, State& state) {
+            if (n < 1)
+                throw std::logic_error("can not read less than 1-bit!");
+            int value=0;
+            while (n--) {
+                value = value + value + bit(state);
+            }
+            return value;
+        }
+        int unary_jpair() {
+            int bitlen = 0;
+            while (bit(stateBitSize))
+                bitlen++;
+            if (bitlen == 0)
+                return 0;
+            return from_jpair( make_jpair( bitlen, bits(bitlen, stateValue) ) );
+        }
+        private:
+            Base& decoder;
+            State stateBitSize;
+            State stateValue;
+    };
+
 
 namespace huffman {
 
@@ -22,14 +126,12 @@ inline std::vector<uint8_t> compress(const the_matrix& matrix) {
     henc.buildHuffmanTree(data.begin(), data.end());
     henc.encodeHuffmanTree(enc_w);
 
-    std::cerr << "haffmantable size = " << enc_w.size() << std::endl;
+    //std::cerr << "huffman table size = " << enc_w.size() << std::endl;
 
     enc_w.writeBits(16, matrix[0].size());
     enc_w.writeBits(16, matrix.size());
     henc.encode(enc_w,data.begin(),data.end());
-    enc_w.flush();
-
-    return std::vector<uint8_t>(enc_w.data(), enc_w.data() + enc_w.size());
+    return enc_w.get_all_bytes();
 }
 
 
@@ -49,98 +151,63 @@ inline the_matrix decompress(const std::vector<uint8_t>& compressed) {
 }
 
 namespace CABAC {
-   
-    template<typename W>
-    class Compressor : public H265Writer<W> {
-        public:
-            Compressor(W& w) : H265Writer<W>(w) {};
-            inline void bit(int b,  uint8_t &state, bool bypass=false) {
-                if (bypass)
-                    H265Writer<W>::put_bypass(b);
-                else
-                    H265Writer<W>::put(b, state);
-            }
-            void bits(int n, int value, uint8_t &state, bool bypass=false) {
-                if (ilog2_32(value,1) > n)
-                    throw std::logic_error("value not fit in n-bits!");
-                
-                for (unsigned mask = 1 << (n-1); mask; mask >>= 1) {
+inline std::vector<uint8_t> compress(const the_matrix& matrix) {
 
-                    bit(value & mask, state,bypass);
-                }
-            }
-            void unary_jpair(int value) {
-                value = to_jpair(value);
-                const auto bitlen = value & 0xf;
-                for (int unary=bitlen;  unary; --unary) {
-                    bit(1,states[0]);
-                }
-                bit(0,states[0]);
-                if (bitlen)
-                   bits(bitlen, value >> 4,states[1]);
-            }
-            private:
-                uint8_t states[2] = {0,0};
+    std::vector<uint8_t> result; //NRVO please
+    auto cabac_codec = H265_compressor(result);
+    auto enc = Compressor( cabac_codec );
 
-    };
-    template <typename R>
-    class Decompressor : public H265Reader<R> {
-        public:
-        Decompressor(R& r) : H265Reader<R>(r) {};
-        inline int bit(uint8_t& state, bool bypass = false) {      
-            return bypass ? H265Reader<R>::get_bypass() : H265Reader<R>::get(state);
-        }
-        int bits(int n, uint8_t& state, bool bypass=false) {
-            if (n < 1) 
-                throw std::logic_error("can not read less than 1-bit!");
-            int value=0;
-            while (n--) {
-                value = value + value + bit(state, bypass);
-            }
-            return value;
-        }
-        int unary_jpair() {
-            int bitlen = 0;
-            while (bit(states[0])) 
-                bitlen++;
-            if (bitlen == 0)
-                return 0;
-            return from_jpair( make_jpair( bitlen, bits(bitlen, states[1]) ) );
-        }
-        private:
-        uint8_t states[2] = {0,0};
-    };
-
-    inline std::vector<uint8_t> compress(const the_matrix& matrix) {
-        WriterVec vec;
-        Compressor enc(vec);
-
- 
-        enc.unary_jpair(matrix[0].size());
-        enc.unary_jpair(matrix.size());
-    
-        process_matrix(matrix, [&](int v){
-            enc.unary_jpair(v);
-        });
-    
-        enc.finish();
- 
-        return std::move(vec.get());
-    }
+    enc.bits_bypass(16,matrix[0].size());
+    enc.bits_bypass(16,matrix.size());
+    process_matrix(matrix, [&](int v){
+        enc.unary_jpair(v);
+    });
+    enc.finish();
+    return result;
+}
 
 inline the_matrix decompress(const std::vector<uint8_t>& compressed) {
-    ReaderIt vec(compressed.begin(), compressed.end());
-    Decompressor dec(vec);
-    auto width = dec.unary_jpair();
-    auto height = dec.unary_jpair();
-    return make_matrix(width, height, [&](int&v) {
+
+    auto cabac_codec =  H265_decompressor( compressed.begin(),compressed.end());
+    auto dec = Decompressor( cabac_codec );
+    auto width = dec.bits_bypass(16);
+    auto height = dec.bits_bypass(16);
+    return make_matrix( width, height,
+    [&](int &v) {
         v = dec.unary_jpair();
+    }
+    );
+}
+}
+
+namespace DMC {
+
+inline std::vector<uint8_t> compress(const the_matrix& matrix) {
+
+    auto dmc_codec = DMC_compressor();
+    auto enc = Compressor(dmc_codec);
+    enc.bits_bypass(16,matrix[0].size());
+    enc.bits_bypass(16,matrix.size());
+    process_matrix(matrix, [&](int v){
+        enc.unary_jpair(v);
+
     });
+    return enc.finish();
+}
+
+inline the_matrix decompress(const std::vector<uint8_t>& compressed) {
+    auto dmc_codec = DMC_decompressor(compressed.data(), compressed.size()*8);
+    auto dec = Decompressor(dmc_codec);
+    auto width = dec.bits_bypass(16);
+    auto height = dec.bits_bypass(16);
+    return make_matrix( width, height,
+    [&](int &v) {
+        v = dec.unary_jpair();
+    }
+    );
 }
 
 }
-
-
 
 
 }  // namespace pack

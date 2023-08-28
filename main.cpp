@@ -88,14 +88,14 @@ void test_compress_decompress(V && data ) {
 
 
 int main() {
-    int max_levels = 5;
+    int max_levels = 8;
     dwt2d::Wavelet wavelet = dwt2d::dwt53;
-    //auto data = make_envelope(32,32,1);
+    //auto data = make_envelope(32,32,200);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
     //auto data = make_gradient(1024,1024,0,128,128,255);
     //auto data = lenna;
-     //auto data = make_sky(128,96);
+     auto data = make_sky(1920,1080);
      //auto data = make_random(512);
      //cubicBlur3x3(data);
      // cubicBlur3x3(data);

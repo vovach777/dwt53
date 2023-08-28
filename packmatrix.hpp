@@ -206,6 +206,7 @@ inline the_matrix decompress(const std::vector<uint8_t>& compressed) {
     }
     );
 }
+
 }
 
 

@@ -12,6 +12,7 @@ class BitWriter {
 
     public:
     inline void writeBits(int n, uint32_t value ) { pb.put_bits(n, value); }
+    inline void writeBits64(int n, uint64_t value ) { pb.put_bits64(n, value); }
     inline void writeBit(bool value) { pb.put_bits(1,value);}
     inline void writeBit0() { writeBit(true);}
     inline void writeBit1() { writeBit(false);}
@@ -25,11 +26,11 @@ class BitWriter {
 
     std::vector<uint8_t> get_current_bytes() {
 
-        std::vector<uint8_t> bytes(8,0);
+        std::vector<uint8_t> bytes;
         std::swap(bytes, pb.bytes);
-        bytes.resize(pb.put_bytes_output());
-        pb.buf_ptr = pb.buf = pb.bytes.data();
-        pb.buf_end = pb.buf + pb.bytes.size();
+
+        pb = ffmpeg::PutBitContext();
+
         return bytes;
 
     }
@@ -119,3 +120,59 @@ inline std::ostream& operator<<(std::ostream& o, BitReader const& a) {
     a.printBits(o);
     return o;
 }
+
+
+#if 0
+void test() {
+    std::vector<uint32_t> test_bits_data;
+    BitWriter bw;
+
+    constexpr size_t test_bits_max  = 8000000;
+
+    for (size_t i = 0; i < test_bits_max; i++ ) {
+
+        uint32_t value = rand()*0x55555555 + rand();
+        uint32_t bits = ilog2_32(value,1);
+        test_bits_data.push_back(bits);
+        test_bits_data.push_back(value);
+        if (bits == 1)
+            bw.writeBit(value);
+        else
+            bw.writeBits(bits,value);
+
+    }
+
+
+    auto bin = bw.get_all_bytes();
+    BitReader br(bin.data(), bin.size()*8);
+
+    std::cout << br.bits_size() << std::endl;
+    bool test_failed = false;
+    for (size_t i = 0; i < test_bits_max; i++ ) {
+    auto bits = test_bits_data[i*2];
+    auto value = test_bits_data[i*2+1];
+
+        if ( bits == 1) {
+            if ( br.readBit() != value)
+                {
+                    std::cerr << "test failed at " << i << std::endl;
+                    test_failed = true;
+                    break;
+                }
+        }
+        else {
+            if (br.readBits(bits) != value)
+                {
+                    std::cerr << "test failed at " << i << std::endl;
+                    test_failed = true;
+                    break;
+                }
+        }
+
+    }
+
+    if (! test_failed) {
+        std::cout << "test passed!" << std::endl;
+    }
+}
+#endif

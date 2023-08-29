@@ -35,6 +35,26 @@ class ValueWriter {
         ref.writeBits(n,value);
     }
 
+    inline void encode_unary( int value, bool is_signed) {
+        if (is_signed) {
+            value = s2u(value);
+        }
+        while (value > 32 ) {
+            ref.writeBits(32,0xffffffff);
+            value -= 32;
+        }
+        while (value > 8 ) {
+            ref.writeBits(8,0xff);
+            value -= 8;
+        }
+        while (value > 0 ) {
+            ref.writeBit(true);
+            value -= 1;
+        }
+        ref.writeBit(false);
+
+    }
+
     void encode_golomb( unsigned k, unsigned value ) {
 
         auto n_ = ilog2_32(value>>k,0);

@@ -9,6 +9,22 @@
 
 
 namespace ffmpeg {
+
+template <typename T>
+inline auto FFABS(T a) {
+    return ((a) >= 0 ? (a) : (-(a)));
+}
+
+template <typename T>
+inline auto FFSIGN(T a) {
+    return ((a) > 0 ? 1 : -1);
+};
+
+template<typename T1, typename T2>
+inline auto FFMIN(T1 a, T2 b) {
+    return std::min<T1>(a,b);
+}
+
 /*
 
  * Define AV_[RW]N helper macros to simplify definitions not provided
@@ -65,6 +81,10 @@ inline uint64_t __attribute__((const)) av_bswap64(uint64_t x)
 {
     return (uint64_t)av_bswap32(x) << 32 | av_bswap32(x >> 32);
 }
+
+ inline int av_log2(uint32_t x) {
+    return (31 - __builtin_clz((x)|1));
+ }
 
 }
 
@@ -200,7 +220,27 @@ public:
         if (beginIt == endIt) {
             throw std::range_error("End of data reached");
         }
-        return *(beginIt++);
+        auto value =  *beginIt++;
+        std::cout << "CABAC input: " << (int)value << std::endl;
+        return value;
+    }
+    uint16_t read_u16r() {
+        return (read_u8() << 8) | read_u8();
+    }
+
+    int32_t read_u24r() {
+
+        int32_t val = read_u8()<<16;
+            val |= read_u8()<<8;
+            val |= read_u8();
+        return val;
+    }
+
+    void seek_to_end() {
+        beginIt = endIt;
+    }
+    void is_end() {
+        return beginIt == endIt;
     }
 
 private:

@@ -543,15 +543,16 @@ the_matrix make_probability(int width=32, int height=32, double probability=0.5,
 }
 
 bool matrix_is_equal(const the_matrix &a, const the_matrix &b ) {
-    if (a.size() == 0 || b.size() == 0)
+    if (a.size() == 0 || b.size() == 0) {
         return a.size() == b.size();
-
+    }
     if (a.size() != b.size() || a[0].size() != b[0].size() )
         return false;
     for (int y=0;y<a.size(); ++y)
     for (int x=0;x<a[y].size(); ++x)
     {
         if (a[y][x] != b[y][x]) {
+            std::cerr << "a != b"  << std::endl << "a:" << a << "b:" << b;
             return false;
         }
     }

@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #    add_definitions(-D_ITERATOR_DEBUG_LEVEL=0)
 #    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 #endif()
+#set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_DEBUG} -Ofast")
 add_definitions(-D_USE_MATH_DEFINES)
 add_executable(example_compress_decompress
     main.cpp
@@ -22,5 +23,6 @@ add_executable(example_compress_decompress
     the_matrix.hpp
     utils.hpp
     dmc.hpp
+    rangecoder.hpp
 )
 

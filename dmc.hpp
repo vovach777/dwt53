@@ -239,6 +239,7 @@ namespace pack
             val = reader.read_u24r();
         }
         inline bool get(StateType &state) {
+            bool bit;
             if ( state == nullptr )
                 state = defaultState();
             auto mid = min + predict( (max-min-1), state);
@@ -248,13 +249,13 @@ namespace pack
                 std::cerr << "end of stream detected by DMC !!!" << std::endl;
             }
             if (val >= mid) {
-                bit = 1;
+                bit = true;
                 min = mid;
             } else {
-                bit = 0;
+                bit = false;
                 max = mid;
             }
-            pupdate(bit != 0, state);
+            pupdate(bit, state);
             while ((max-min) < 256) {
                 if(bit)max--; //why?
                 val = (val << 8) & 0xffff00 | reader.reader_u8();

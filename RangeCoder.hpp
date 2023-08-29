@@ -216,7 +216,9 @@ namespace ffmpeg
                 range <<= 8;
                 low <<= 8;
                 if (reader.is_end())
-                    overread++ else low += reader.read_u8();
+                    overread++;
+                 else 
+                    low += reader.read_u8();
             }
         }
 
@@ -253,14 +255,14 @@ namespace ffmpeg
 
         int get_symbol(int is_signed)
         {
-            if (get_rac(c, symbol_state[0]))
+            if (get_rac(symbol_state[0]))
                 return 0;
             else
             {
                 int i, e;
                 unsigned a;
                 e = 0;
-                while (get_rac(c, symbol_state[1 + FFMIN(e, 9)]))
+                while (get_rac(symbol_state[1 + FFMIN(e, 9)]))
                 { // 1..10
                     e++;
                     if (e > 31)
@@ -269,9 +271,9 @@ namespace ffmpeg
 
                 a = 1;
                 for (i = e - 1; i >= 0; i--)
-                    a += a + get_rac(c, symbol_state[22 + FFMIN(i, 9)]); // 22..31
+                    a += a + get_rac(symbol_state[22 + FFMIN(i, 9)]); // 22..31
 
-                e = -(is_signed && get_rac(c, symbol_state[11 + FFMIN(e, 10)])); // 11..21
+                e = -(is_signed && get_rac(symbol_state[11 + FFMIN(e, 10)])); // 11..21
                 return (a ^ e) - e;
             }
         }

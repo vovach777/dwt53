@@ -99,8 +99,8 @@ int main() {
     //auto data = make_envelope(32,32,200);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
-    auto data = make_gradient(1024,1024,0,128,128,255);
-    //auto data = lenna;
+    //auto data = make_gradient(1024,1024,0,128,128,255);
+    auto data = lenna;
      //auto data = make_sky(1920,1080);
      //auto data = make_random(512);
      //cubicBlur3x3(data);
@@ -110,8 +110,9 @@ int main() {
 
     dwt2d::Transform codec;
     codec.prepare_transform(max_levels, wavelet, data);
-    data = codec.forward();
-
+    codec.forward();
+    codec.quantization(3);
+    data = codec.get_data();
 
 
 

@@ -5,12 +5,18 @@
 #include <iomanip>
 #include <iostream>
 #include <vector>
+#include <chrono>
 
 #include "dwt53.hpp"
 #include "the_matrix.hpp"
 
 #include "utils.hpp"
-#include "packmatrix.hpp"
+//#include "packmatrix.hpp"
+#include "rangecoder.hpp"
+#include "dmc.hpp"
+#include "cabacH265.hpp"
+#include "bitstream.hpp"
+#include "bitstream_helper.hpp"
 using namespace pack;
 
 the_matrix lenna = {
@@ -48,42 +54,42 @@ the_matrix lenna = {
     {73, 164, 159, 162, 51, 58, 65, 79, 75, 72, 63, 69, 113, 128, 131, 135, 140, 145, 146, 147, 158, 175, 206, 182, 92, 123, 114, 96, 83, 100, 89, 59, },
 };
 
-template <typename V, typename S>
-void test(V && data, S && description ) {
-    std::cout << "** PACK " << description << " **\nteoretic size=\t" << matrix_energy(data) << std::endl;
-    std::cout << "huffman size=\t" << huffman::compress(data).size() << std::endl;
-    std::cout << "DMC size=\t"     << DMC::compress(data).size()     << std::endl;
-    std::cout << "H265 size=\t"    << CABAC::compress(data).size()   << std::endl;
-    std::cout << std::endl;
+// template <typename V, typename S>
+// void test(V && data, S && description ) {
+//     std::cout << "** PACK " << description << " **\nteoretic size=\t" << matrix_energy(data) << std::endl;
+//     std::cout << "huffman size=\t" << huffman::compress(data).size() << std::endl;
+//     std::cout << "DMC size=\t"     << DMC::compress(data).size()     << std::endl;
+//     std::cout << "H265 size=\t"    << CABAC::compress(data).size()   << std::endl;
+//     std::cout << std::endl;
 
-    test_compress_decompress(data);
+//     test_compress_decompress(data);
 
-}
+// }
 
-template <typename V>
-void test_compress_decompress(V && data ) {
-    std::cout << "huffman decompression:\t";
-    try {
-       std::cout << (matrix_is_equal(  huffman::decompress( huffman::compress(data) ), data) ? "Passed!"  :  "FAIL!!!") << std::endl;
-    } catch(const std::exception & e) {
-        std::cout << "EXCEPTION \"" <<  e.what() << "\"" << std::endl;
-    }
+// template <typename V>
+// void test_compress_decompress(V && data ) {
+//     std::cout << "huffman decompression:\t";
+//     try {
+//        std::cout << (matrix_is_equal(  huffman::decompress( huffman::compress(data) ), data) ? "Passed!"  :  "FAIL!!!") << std::endl;
+//     } catch(const std::exception & e) {
+//         std::cout << "EXCEPTION \"" <<  e.what() << "\"" << std::endl;
+//     }
 
-    std::cout << "DMC decompression:\t";
-    try {
-       std::cout << (matrix_is_equal(  DMC::decompress( DMC::compress(data) ), data) ? "Passed!"  :  "FAIL!!!") << std::endl;
-    } catch(const std::exception & e) {
-        std::cout << "EXCEPTION \"" <<  e.what() << "\"" << std::endl;
-    }
+//     std::cout << "DMC decompression:\t";
+//     try {
+//        std::cout << (matrix_is_equal(  DMC::decompress( DMC::compress(data) ), data) ? "Passed!"  :  "FAIL!!!") << std::endl;
+//     } catch(const std::exception & e) {
+//         std::cout << "EXCEPTION \"" <<  e.what() << "\"" << std::endl;
+//     }
 
-    std::cout << "H265 decompression:\t";
-    try {
-       std::cout << (matrix_is_equal(  CABAC::decompress( CABAC::compress(data) ), data) ? "Passed!"  :  "FAIL!!!") << std::endl;
-    } catch(const std::exception & e) {
-        std::cout << "EXCEPTION \"" <<  e.what() << "\"" << std::endl;
-    }
+//     std::cout << "H265 decompression:\t";
+//     try {
+//        std::cout << (matrix_is_equal(  CABAC::decompress( CABAC::compress(data) ), data) ? "Passed!"  :  "FAIL!!!") << std::endl;
+//     } catch(const std::exception & e) {
+//         std::cout << "EXCEPTION \"" <<  e.what() << "\"" << std::endl;
+//     }
 
-}
+// }
 
 
 
@@ -93,71 +99,77 @@ int main() {
     //auto data = make_envelope(32,32,200);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
-    //auto data = make_gradient(1024,1024,0,128,128,255);
+    auto data = make_gradient(1024,1024,0,128,128,255);
     //auto data = lenna;
      //auto data = make_sky(1920,1080);
      //auto data = make_random(512);
      //cubicBlur3x3(data);
      // cubicBlur3x3(data);
-     auto data = make_probability(8,8,0.1,100);
+     //auto data = make_probability(1920,1080,0.02,255);
+     //cubicBlur3x3(data);
 
-     std::cout << data;
+    dwt2d::Transform codec;
+    codec.prepare_transform(max_levels, wavelet, data);
+    data = codec.forward();
 
-    std::vector<uint32_t> test_bits_data;
-    BitWriter bw;
 
-    constexpr size_t test_bits_max  = 8000000;
 
-    for (size_t i = 0; i < test_bits_max; i++ ) {
 
-        uint32_t value = rand()*0x55555555 + rand();
-        uint32_t bits = ilog2_32(value,1);
-        test_bits_data.push_back(bits);
-        test_bits_data.push_back(value);
-        if (bits == 1)
-            bw.writeBit(value);
-        else
-            bw.writeBits(bits,value);
+    H265_compressor enc_cabac;
+    auto enc_cabac_state = enc_cabac.defaultState();
 
+    DMC_compressor  enc_dmc;
+    auto enc_dmc_state = enc_dmc.defaultState();
+
+    RangeCoderCompressor enc_range;
+    auto enc_range_state = enc_range.defaultState();
+
+
+    auto flatten_data =  flatten(data);
+    enc_dmc.reset_model(3000000);
+
+    using std::chrono::high_resolution_clock;
+    using std::chrono::duration_cast;
+    using std::chrono::duration;
+    using std::chrono::milliseconds;
+
+    std::cout << "Encoding perfomance in ms (lower - better):" << std::endl;
+
+    auto t1 = high_resolution_clock::now();
+    for (auto v : flatten_data ) {
+        enc_dmc.put_symbol(v,1);
     }
+    auto t2 = high_resolution_clock::now();
+    std::cout << "DMC:\t" << duration_cast<milliseconds>(t2 - t1).count() << std::endl;
 
-
-    auto bin = bw.get_all_bytes();
-    BitReader br(bin.data(), bin.size()*8);
-
-    std::cout << br.bits_size() << std::endl;
-    bool test_failed = false;
-    for (size_t i = 0; i < test_bits_max; i++ ) {
-    auto bits = test_bits_data[i*2];
-    auto value = test_bits_data[i*2+1];
-
-        if ( bits == 1) {
-            if ( br.readBit() != value)
-                {
-                    std::cerr << "test failed at " << i << std::endl;
-                    test_failed = true;
-                    break;
-                }
-        }
-        else {
-            if (br.readBits(bits) != value)
-                {
-                    std::cerr << "test failed at " << i << std::endl;
-                    test_failed = true;
-                    break;
-                }
-        }
-
+    t1 = high_resolution_clock::now();
+    for (auto v : flatten_data ) {
+        enc_range.put_symbol(v, 1);
     }
+    t2 = high_resolution_clock::now();
+    std::cout << "RANGE:\t" << duration_cast<milliseconds>(t2 - t1).count() << std::endl;
 
-    if (! test_failed) {
-        std::cout << "test passed!" << std::endl;
+    t1 = high_resolution_clock::now();
+    for (auto v : flatten_data ) {
+        enc_cabac.put_symbol(v,1);
     }
+    t2 = high_resolution_clock::now();
+    std::cout << "CABAC:\t" << duration_cast<milliseconds>(t2 - t1).count() << std::endl;
 
-    //std::cout << "decoded ints (" <<  values.size() << ")" <<  std::endl << values << std::endl;
+
+    std::cout << std::endl;
+
+    auto data_energy = matrix_energy(data);
+
+    std::cout << "Predict\t" << flatten_data.size() << " -> " << data_energy << std::endl;
+    std::cout << "CABAC\t"  <<  flatten_data.size() << " -> " << enc_cabac.finish().size() << std::endl;
+    std::cout << "DMC\t"    << flatten_data.size() << " -> " << enc_dmc.finish().size()  << " nodes: " << enc_dmc.get_nodes_count() << std::endl;
+    std::cout << "RANGE\t"  << flatten_data.size() << " -> " << enc_range.finish().size() << std::endl;
 
 
-    // test(data,"original");
+
+
+//    test(data,"original");
 
     // dwt2d::Transform codec;
     // codec.prepare_transform(max_levels, wavelet, data);

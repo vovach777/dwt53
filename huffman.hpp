@@ -257,6 +257,8 @@ namespace pack {
             for (auto it = begin; it != end; ++it) {
                 encode(dest, *it);
             }
+
+            std::cerr << "huffman_codes: " << dest << std::endl;
         }
         inline void encode(BitWriter& dest, T value) {
             auto [bit_count, code] = huffmanCode.at(value);
@@ -264,6 +266,7 @@ namespace pack {
             //     dest.writeBit(code & 1);
             //     code >>= 1;
             // }
+            std::cout << "encoding " << (int)value << " => (" << (int)bit_count << "," << (int)code << ")" << std::endl;
             dest.writeBits(bit_count, code);
         }
 

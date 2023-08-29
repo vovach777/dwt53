@@ -83,14 +83,14 @@ BitstreamContextBE(const uint8_t *buffer,  int64_t bit_size)
 {
     size_t buffer_size;
     buffer_size = (bit_size + 7) >> 3;
-    buffer = buffer;
+    this->buffer = buffer;
     buffer_end = buffer + buffer_size;
     ptr = buffer;
     size_in_bits = bit_size;
     bits_valid = 0;
     bits = 0;
 
-    if (buffer_end < ptr) {
+    if (buffer_end < ptr || buffer == nullptr) {
         throw std::length_error("Invalid data found when processing input");
     }
 
@@ -354,25 +354,37 @@ struct PutBitContext {
     int bit_left = 0;
     uint8_t *buf = nullptr, *buf_ptr = nullptr, *buf_end = nullptr;
     std::vector<uint8_t> bytes;
+
+    PutBitContext& operator=(const PutBitContext &other) {
+
+        if (this == &other )
+            return *this;
+        bit_buf = other.bit_buf;
+        bit_left = other.bit_left;
+        buf = other.buf;
+        buf_ptr = other.buf_ptr;
+        buf_end = other.buf_end;
+        bytes = other.bytes;
+        if (buf)
+            rebase_put_bits(bytes.data(), bytes.size());
+        return *this;
+    }
+
+    PutBitContext(const PutBitContext &other) {
+        operator=( other );
+    }
+
 /**
  * Initialize the PutBitContext s.
  *
  * @param buffer the buffer where to put bits
  * @param buffer_size the size in bytes of buffer
  */
-PutBitContext() : bytes(8,0)
+PutBitContext()
 {
-
-    auto buffer = bytes.data();
-    auto buffer_size = bytes.size();
-
-    if (buffer_size < 0) {
-        buffer_size = 0;
-        buffer = NULL;
-    }
-    buf = buffer;
-    buf_end = buf + buffer_size;
-    buf_ptr = buf;
+    buf = nullptr;
+    buf_end = nullptr;
+    buf_ptr = nullptr;
     bit_left = BUF_BITS;
     bit_buf = 0;
 }

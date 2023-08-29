@@ -13,8 +13,8 @@ namespace pack {
 class H265Base {
     public:
     using StateType = uint8_t;
-    static StateType defaultState() {
-        return StateType{};
+    StateType defaultState() {
+        return 0;
     }
     protected:
 
@@ -122,14 +122,16 @@ const std::vector<uint8_t> RENORM_TABLE = {
         return static_cast<size_t>(uc_state >> 1);
     }
 
+    StateType symbol_state[32] = {0};
+
 };
 
 
 
 class H265_compressor : public H265Base {
 public:
-    explicit H265_compressor(std::vector<uint8_t> & output_u8)
-        : output_u8(output_u8), low(0), range(510), buffered_byte(0xff), num_buffered_bytes(0), bits_left(23) {
+    explicit H265_compressor()
+        :  low(0), range(510), buffered_byte(0xff), num_buffered_bytes(0), bits_left(23) {
         }
 
     void put_bypass(bool value) {
@@ -175,7 +177,7 @@ public:
         }
     }
 
-    void finish() {
+    std::vector<uint8_t> finish() {
         assert(bits_left <= 32);
 
         if ((low >> (32 - bits_left)) != 0) {
@@ -209,7 +211,52 @@ public:
         if (bits > 0) {
             output_u8.push_back((data << (8 - bits)) & 0xff);
         }
+        std::vector<uint8_t> res;
+        std::swap(res, output_u8);
+        return res;
     }
+
+        void put_symbol(int v, int is_signed)
+        {
+            int i;
+
+            if (v)
+            {
+                const int a = ffmpeg::FFABS(v);
+                const int e = ffmpeg::av_log2(a);
+                put(0, symbol_state[0]);
+                if (e <= 9)
+                {
+                    for (i = 0; i < e; i++)
+                        put(1, symbol_state[1 + i]); // 1..10
+                    put(0, symbol_state[1 + i]);
+
+                    for (i = e - 1; i >= 0; i--)
+                        put((a >> i) & 1, symbol_state[22 + i]); // 22..31
+
+                    if (is_signed)
+                        put(v < 0,symbol_state[11 + e]); // 11..21
+                }
+                else
+                {
+                    for (i = 0; i < e; i++)
+                        put(1,symbol_state[1 + ffmpeg::FFMIN(i, 9)]); // 1..10
+                    put(0,symbol_state[ 1 + 9]);
+
+                    for (i = e - 1; i >= 0; i--)
+                        put((a >> i) & 1,symbol_state[22 + ffmpeg::FFMIN(i, 9)]); // 22..31
+
+                    if (is_signed)
+                        put(v < 0,symbol_state[11 + 10]); // 11..21
+                }
+            }
+            else
+            {
+                put(1,symbol_state[0]);
+            }
+        }
+
+
 
 private:
     void flush_completed() {
@@ -237,13 +284,12 @@ private:
         }
     }
 
-    std::vector<uint8_t> &output_u8;
+    std::vector<uint8_t> output_u8;
     uint32_t low;
     uint32_t range;
     uint32_t buffered_byte;
     int32_t num_buffered_bytes;
     int32_t bits_left;
-
 };
 
 

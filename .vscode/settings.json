@@ -87,8 +87,10 @@
         "memory_resource": "cpp",
         "__memory": "cpp",
         "random": "cpp",
-        "functional": "cpp"
+        "functional": "cpp",
+        "map": "cpp",
+        "xtree": "cpp"
     },
     "cmake.configureOnOpen": true,
- 
+
 }

@@ -1,224 +1,287 @@
-#pragma once
-#include <iostream>
-
-
 #include <cstdint>
-#include <iterator>
 #include <vector>
 #include <stdexcept>
-#include <cassert>
+#include "utils.hpp"
 
-namespace pack {
+namespace ffmpeg
+{
 
-class RangeBase {
-    public:
-    using StateType = uint8_t;
+    class RangeCoderBase
+    {
     protected:
-
-const std::vector<uint8_t> RENORM_TABLE = {
-    6, 5, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
-};
-
-
-
-template<typename W>
-class H265Writer : public H265Base {
-public:
-    using WriterType = W;
-
-    H265Writer(W& writer)
-        : writer(writer), low(0), range(510), buffered_byte(0xff), num_buffered_bytes(0), bits_left(23) {}
-
-    void put_bypass(bool value) {
-        low <<= 1;
-        if (value) {
-            low += range;
+        int low = 0;
+        int range = 0xFF00;
+        uint8_t zero_state[256] = {0};
+        uint8_t one_state[256] = {0};
+        uint8_t symbol_state[32];
+        RangeCoderBase()
+        {
+            ff_build_rac_states((1LL << 32) / 20, 128 + 64 + 32 + 16);
+            std::fill(std::begin(symbol_state), std::end(symbol_state),128);
         }
 
-        bits_left -= 1;
-
-        if (bits_left < 12) {
-            flush_completed();
-        }
-    }
-
-    void put(bool value, uint8_t & uc_state) {
-        low <<= 1;
-        if (value) {
-            low += range;
-        }
-
-        bits_left -= 1;
-
-        if (bits_left < 12) {
-            flush_completed();
-        }
-
-    }
-
-    void finish() {
-        assert(bits_left <= 32);
-
-        if ((low >> (32 - bits_left)) != 0) {
-            writer.write_u8((buffered_byte + 1) & 0xff);
-            while (num_buffered_bytes > 1) {
-                writer.write_u8(0x00);
-                num_buffered_bytes -= 1;
+        void ff_build_rac_states(int factor, int max_p)
+        {
+            const int64_t one = 1LL << 32;
+            int64_t p;
+            int last_p8, p8, i;
+            // memset(c->zero_state, 0, sizeof(c->zero_state));
+            // memset(c->one_state, 0, sizeof(c->one_state));
+            last_p8 = 0;
+            p = one / 2;
+            for (i = 0; i < 128; i++)
+            {
+                p8 = (256 * p + one / 2) >> 32; // FIXME: try without the one
+                if (p8 <= last_p8)
+                    p8 = last_p8 + 1;
+                if (last_p8 && last_p8 < 256 && p8 <= max_p)
+                    one_state[last_p8] = p8;
+                p += ((one - p) * factor + one / 2) >> 32;
+                last_p8 = p8;
             }
-
-            low -= 1 << (32 - bits_left);
-        } else {
-            if (num_buffered_bytes > 0) {
-                writer.write_u8(buffered_byte & 0xff);
+            for (i = 256 - max_p; i <= max_p; i++)
+            {
+                if (one_state[i])
+                    continue;
+                p = (i * one + 128) >> 8;
+                p += ((one - p) * factor + one / 2) >> 32;
+                p8 = (256 * p + one / 2) >> 32; // FIXME: try without the one
+                if (p8 <= i)
+                    p8 = i + 1;
+                if (p8 > max_p)
+                    p8 = max_p;
+                one_state[i] = p8;
             }
+            for (i = 1; i < 255; i++)
+                zero_state[i] = 256 - one_state[256 - i];
+        }
+        public:
+          uint8_t defaultState() {
+            return 128;
+          }
+    };
 
-            while (num_buffered_bytes > 1) {
-                writer.write_u8(0xff);
-                num_buffered_bytes -= 1;
+    class RangeCoderCompressor : public RangeCoderBase
+    {
+    protected:
+        std::vector<uint8_t> bytestream;
+        int outstanding_count = 0;
+        int outstanding_byte = -1;
+
+        inline void renorm_encoder()
+        {
+            // FIXME: optimize
+            while (range < 0x100)
+            {
+                if (outstanding_byte < 0)
+                {
+                    outstanding_byte = low >> 8;
+                }
+                else if (low <= 0xFF00)
+                {
+                    bytestream.push_back(outstanding_byte);
+                    for (; outstanding_count; outstanding_count--)
+                        bytestream.push_back(0xFF);
+                    outstanding_byte = low >> 8;
+                }
+                else if (low >= 0x10000)
+                {
+                    bytestream.push_back(outstanding_byte + 1);
+                    for (; outstanding_count; outstanding_count--)
+                        bytestream.push_back(0x00);
+                    outstanding_byte = (low >> 8) & 0xFF;
+                }
+                else
+                {
+                    outstanding_count++;
+                }
+                low = (low & 0xFF) << 8;
+                range <<= 8;
             }
         }
 
-        uint32_t bits = 32 - bits_left;
-
-        uint32_t data = low;
-
-        while (bits >= 8) {
-            writer.write_u8((data >> (bits - 8)) & 0xff);
-            bits -= 8;
+    public:
+        RangeCoderCompressor() : RangeCoderBase() {}
+        inline size_t get_rac_count()
+        {
+            auto x = bytestream.size() + outstanding_count;
+            if (outstanding_byte >= 0)
+                x++;
+            return 8 * x - av_log2(range);
         }
 
-        if (bits > 0) {
-            writer.write_u8((data << (8 - bits)) & 0xff);
+        inline void put(bool bit, uint8_t &state) {
+            put_rac(state, bit);
         }
-    }
 
-private:
+        inline void put_rac(uint8_t &state, int bit)
+        {
+            int range1 = (range * (state)) >> 8;
 
-    W& writer;
-    uint32_t low;
-    uint32_t range;
-    uint32_t buffered_byte;
-    int32_t num_buffered_bytes;
-    int32_t bits_left;
-
-    void flush_completed() {
-        uint32_t lead_byte = low >> (24 - bits_left);
-        bits_left += 8;
-        low &= 0xffffffff >> bits_left;
-
-        if (lead_byte == 0xff) {
-            num_buffered_bytes += 1;
-        } else if (num_buffered_bytes > 0) {
-            uint32_t carry = lead_byte >> 8;
-            uint32_t byte = buffered_byte + carry;
-            buffered_byte = lead_byte & 0xff;
-
-            writer.write_u8(byte & 0xff);
-
-            byte = (0xff + carry) & 0xff;
-            while (num_buffered_bytes > 1) {
-                writer.write_u8(byte & 0xff);
-                num_buffered_bytes -= 1;
+          assert(state);
+          assert(range1 < range);
+          assert(range1 > 0);
+            if (!bit)
+            {
+                range -= range1;
+                state = zero_state[state];
             }
-        } else {
-            num_buffered_bytes = 1;
-            buffered_byte = lead_byte;
-        }
-    }
-};
-
-template<typename R>
-class H265Reader : public H265Base {
-public:
-    using ReaderType = R;
-    H265Reader(R &reader)
-        : reader(reader), value(0), range(510), bits_needed(8) {
-        value = (static_cast<uint32_t>(reader.read_u8()) << 8) | static_cast<uint32_t>(reader.read_u8());
-        bits_needed -= 16;
-    }
-
-    bool get_bypass() {
-        value <<= 1;
-        bits_needed += 1;
-
-        if (bits_needed >= 0) {
-            bits_needed = -8;
-            value |= static_cast<uint32_t>(reader.read_u8());
+            else
+            {
+                low += range - range1;
+                range = range1;
+                state = one_state[state];
+            }
+            assert(range);
+            renorm_encoder();
         }
 
-        uint32_t scaled_range = range << 7;
-        auto result = value - scaled_range;
+        void put_symbol(int v, int is_signed)
+        {
+            int i;
 
-        if (result > 0xFFFFU) {
-            return false;
-        } else {
-            value = result;
-            return true;
-        }
-    }
+            if (v)
+            {
+                const int a = FFABS(v);
+                const int e = av_log2(a);
+                put_rac(symbol_state[0], 0);
+                if (e <= 9)
+                {
+                    for (i = 0; i < e; i++)
+                        put_rac(symbol_state[1 + i], 1); // 1..10
+                    put_rac(symbol_state[1 + i], 0);
 
-    bool get(uint8_t& uc_state) {
-        uint32_t local_range = range;
-        uint32_t local_value = value;
-        uint32_t lps = LPST_TABLE[get_state(uc_state)][((local_range >> 6) & 3)];
+                    for (i = e - 1; i >= 0; i--)
+                        put_rac(symbol_state[22 + i], (a >> i) & 1); // 22..31
 
-        local_range -= lps;
+                    if (is_signed)
+                        put_rac(symbol_state[11 + e], v < 0); // 11..21
+                }
+                else
+                {
+                    for (i = 0; i < e; i++)
+                        put_rac(symbol_state[1 + FFMIN(i, 9)], 1); // 1..10
+                    put_rac(symbol_state[ 1 + 9], 0);
 
-        uint32_t scaled_range = local_range << 7;
+                    for (i = e - 1; i >= 0; i--)
+                        put_rac(symbol_state[22 + FFMIN(i, 9)], (a >> i) & 1); // 22..31
 
-        bool bit;
-
-        uint32_t result = local_value - scaled_range;
-
-        if (result > 0xFFFFU) {
-            // MPS path
-
-            bit = get_mps(uc_state);
-            update_mps(uc_state);
-
-            if (scaled_range < (256 << 7)) {
-                local_range = scaled_range >> 6;
-                local_value <<= 1;
-                bits_needed += 1;
-
-                if (bits_needed == 0) {
-                    bits_needed = -8;
-                    local_value |= static_cast<uint32_t>(reader.read_u8());
+                    if (is_signed)
+                        put_rac(symbol_state[11 + 10], v < 0); // 11..21
                 }
             }
-        } else {
-            // LPS path
-
-            local_value = result;
-
-            uint32_t num_bits = RENORM_TABLE[(lps >> 3)];
-            local_value <<= num_bits;
-            local_range = lps << num_bits;
-
-            bit = !get_mps(uc_state);
-            update_lps(uc_state);
-
-            bits_needed += num_bits;
-
-            if (bits_needed >= 0) {
-                local_value |= static_cast<uint32_t>(reader.read_u8()) << bits_needed;
-                bits_needed -= 8;
+            else
+            {
+                put_rac(symbol_state[0], 1);
             }
         }
 
-        range = local_range;
-        value = local_value;
+        /**
 
-        return bit;
-    }
+         * Terminates the range coder
 
-private:
-    R &reader;
-    uint32_t value;
-    uint32_t range;
-    int32_t bits_needed;
-};
+         * @param version version 0 requires the decoder to know the data size in bytes
 
+         *                version 1 needs about 1 bit more space but does not need to
+
+         *                          carry the size from encoder to decoder
+
+         */
+
+        /* Return the number of bytes written. */
+        std::vector<uint8_t> finish()
+        {
+            range = 0xFF;
+            low += 0xFF;
+            renorm_encoder();
+            range = 0xFF;
+            renorm_encoder();
+            std::vector<uint8_t> res;
+            std::swap(bytestream, res);
+            return res;
+        }
+    };
+
+    template <typename Iterator>
+    class RangeCoderDecompressor : public RangeCoderBase
+    {
+    protected:
+        Reader<Iterator> reader;
+        int overread = 0;
+
+        inline void refill()
+        {
+            if (range < 0x100)
+            {
+                range <<= 8;
+                low <<= 8;
+                if (reader.is_end())
+                    overread++ else low += reader.read_u8();
+            }
+        }
+
+    public:
+        RangeCoderDecompressor(Iterator begin, Iterator end) : RangeCoderBase(), reader(begin, end)
+        {
+            low = reader.read_u16();
+            if (low >= 0xFF00)
+            {
+                low = 0xFF00;
+                reader.end();
+            }
+        }
+
+        inline int get_rac(uint8_t &state)
+        {
+            int range1 = (range * (state)) >> 8;
+            range -= range1;
+            if (low < range)
+            {
+                state = zero_state[state];
+                refill();
+                return 0;
+            }
+            else
+            {
+                low -= range;
+                state = one_state[state];
+                range = range1;
+                refill();
+                return 1;
+            }
+        }
+
+        int get_symbol(int is_signed)
+        {
+            if (get_rac(c, symbol_state[0]))
+                return 0;
+            else
+            {
+                int i, e;
+                unsigned a;
+                e = 0;
+                while (get_rac(c, symbol_state[1 + FFMIN(e, 9)]))
+                { // 1..10
+                    e++;
+                    if (e > 31)
+                        throw std::runtime_error("AVERROR_INVALIDDATA");
+                }
+
+                a = 1;
+                for (i = e - 1; i >= 0; i--)
+                    a += a + get_rac(c, symbol_state[22 + FFMIN(i, 9)]); // 22..31
+
+                e = -(is_signed && get_rac(c, symbol_state[11 + FFMIN(e, 10)])); // 11..21
+                return (a ^ e) - e;
+            }
+        }
+    };
+}
+
+namespace pack {
+    using RangeCoderCompressor = ffmpeg::RangeCoderCompressor;
+
+    template <typename Iterator>
+    using RangeCoderDecompressor = ffmpeg::RangeCoderDecompressor<Iterator>;
 
 }

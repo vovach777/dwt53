@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.16)
 project(dwt53 CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -10,7 +10,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 #endif()
 #set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_DEBUG} -Ofast")
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" )
+
 add_definitions(-D_USE_MATH_DEFINES)
+set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
 add_executable(example_compress_decompress
     main.cpp
     bitstream.hpp
@@ -26,3 +30,9 @@ add_executable(example_compress_decompress
     rangecoder.hpp
 )
 
+add_executable(dmc_compressor
+    dmc_compressor.cpp
+    dmc.hpp
+    utils.hpp
+    mio.hpp
+)

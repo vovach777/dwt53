@@ -46,6 +46,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <cassert>
 #include "bitstream.hpp"
 
 namespace pack
@@ -54,7 +55,6 @@ namespace pack
     {
     protected:
         struct node;
-        bool first_flag = true;
         virtual void init()
         {
             reset_model(0x10000);
@@ -67,7 +67,6 @@ namespace pack
         }
         DMCBase() {
             init();
-            std::fill(std::begin(symbol_state), std::end(symbol_state), defaultState() );
         }
         int get_nodes_count()
         {
@@ -81,15 +80,15 @@ namespace pack
             {
                 for (int i = 0; i < 127; i++)
                 {
-                    nodes[j][i].count[0] = 0.2 * FP_CONST;
-                    nodes[j][i].count[1] = 0.2 * FP_CONST;
+                    nodes[j][i].count[0] = 0.2;
+                    nodes[j][i].count[1] = 0.2;
                     nodes[j][i].next[0] = &nodes[j][2 * i + 1];
                     nodes[j][i].next[1] = &nodes[j][2 * i + 2];
                 }
                 for (int i = 127; i < 255; i++)
                 {
-                    nodes[j][i].count[0] = 0.2 * FP_CONST;
-                    nodes[j][i].count[1] = 0.2 * FP_CONST;
+                    nodes[j][i].count[0] = 0.2;
+                    nodes[j][i].count[1] = 0.2;
                     nodes[j][i].next[0] = &nodes[i + 1][0];
                     nodes[j][i].next[1] = &nodes[i - 127][0];
                 }
@@ -97,12 +96,13 @@ namespace pack
             nodebuf.clear();
             nodebuf.shrink_to_fit();
             nodebuf.reserve(maxnodes);
+            std::fill(std::begin(symbol_state), std::end(symbol_state), defaultState() );
         }
     protected:
 
         struct node
         {
-            size_t count[2] = {0, 0};
+            float count[2] = {0, 0};
             node *next[2] = {nullptr, nullptr};
             node() = default;
         };
@@ -112,40 +112,34 @@ namespace pack
 
         std::vector<node> nodebuf;
 
-        inline int predict(int val, StateType p)
+
+        inline float predict(StateType state)
         {
-            return val * p->count[0] / (p->count[0] + p->count[1]);
+            return state->count[0] / (state->count[0] + state->count[1]);
         }
 
-        void pupdate(int b, StateType &p)
+        void pupdate(bool b, StateType & state)
         {
-            if (p->count[b] >= threshold &&
-                p->next[b]->count[0] + p->next[b]->count[1] >=
-                    bigthresh + p->count[b])
+            if ( nodebuf.size() < nodebuf.capacity() &&
+                state->count[b] >= threshold &&
+                state->next[b]->count[0]+state->next[b]->count[1] >= bigthresh + state->count[b])
             {
-                if (nodebuf.size() < nodebuf.capacity())
-                {
-                    node *new_ = &nodebuf.emplace_back();
-                    auto r_mul = p->count[b];
-                    auto r_div = p->next[b]->count[1] + p->next[b]->count[0];
-                    p->next[b]->count[0] -= new_->count[0] = p->next[b]->count[0] * r_mul / r_div;
-                    p->next[b]->count[1] -= new_->count[1] = p->next[b]->count[1] * r_mul / r_div;
-                    new_->next[0] = p->next[b]->next[0];
-                    new_->next[1] = p->next[b]->next[1];
-                    p->next[b] = new_;
-                } else
-                    p = defaultState();
+                node *new_ = &nodebuf.emplace_back();
+                const float r = state->count[b]/(state->next[b]->count[1]+state->next[b]->count[0]);
+                state->next[b]->count[0] -= new_->count[0] = state->next[b]->count[0] * r;
+                state->next[b]->count[1] -= new_->count[1] = state->next[b]->count[1] * r;
+                new_->next[0] = state->next[b]->next[0];
+                new_->next[1] = state->next[b]->next[1];
+                state->next[b] = new_;
             }
-            p->count[b] += FP_CONST;
-            p = p->next[b];
+            state->count[b] += 1;
+            state = state->next[b];
         }
 
-        static constexpr int FP_CONST = 256;
-        static constexpr int threshold = 2 * FP_CONST;
-        static constexpr int bigthresh = 2 * FP_CONST;
-        unsigned int max = 0x1000000;
-        unsigned int min = 0;
-        unsigned int val = 0;
+        static constexpr float threshold = 2;
+        static constexpr float bigthresh = 2;
+        int max = 0xffffff;
+        int min = 0;
         StateType symbol_state[32];
     };
 
@@ -154,25 +148,24 @@ namespace pack
         public:
         DMC_compressor() : DMCBase() {}
         inline void put(bool bit, StateType &state) {
-            if ( state == nullptr )
-                state = defaultState();
 
-            auto mid = min + predict((max-min-1), state);
-            pupdate(bit, state);
+            int mid = min + (max-min) * predict(state);
+            //std::cout << "<" << mid << std::endl;
+            pupdate(bit,state);
             if (mid == min) mid++;
-            if (mid == (max-1)) mid--;
-
+            if (mid == max) mid--;
+            assert(mid >= min);
+            assert(mid <= max);
             if (bit) {
                 min = mid;
             } else {
                 max = mid;
             }
             while ((max-min) < 256) {
-                if(bit)max--;
-                bytestream.push_back(min >> 16);
+                bytestream.push_back((min >> 16) & 0xff);
                 min = (min << 8) & 0xffff00;
                 max = ((max << 8) & 0xffff00 ) ;
-                if (min >= max) max = 0x1000000;
+                if (min >= max) max = 0xffffff;
             }
         }
         void put_symbol(int v, int is_signed)
@@ -218,10 +211,9 @@ namespace pack
 
         std::vector<uint8_t> finish() {
             //std::cout << "DMC nodes: " << get_nodes_count() << std::endl;
-            min = max-1;
-            bytestream.push_back( min >> 16 );
-            bytestream.push_back((min>>8) & 0xff);
-            bytestream.push_back(min & 0xff);
+            bytestream.push_back( (min >> 16) & 0xff);
+            bytestream.push_back( (min >> 8) & 0xff);
+            bytestream.push_back(  min & 0xff);
             std::vector<uint8_t> res;
             std::swap(res,bytestream);
             return res;
@@ -240,14 +232,15 @@ namespace pack
         }
         inline bool get(StateType &state) {
             bool bit;
-            if ( state == nullptr )
-                state = defaultState();
-            auto mid = min + predict( (max-min-1), state);
-            if (mid == min) mid++;
-            if (mid == (max-1)) mid--;
-            if (val == max-1) {
-                std::cerr << "end of stream detected by DMC !!!" << std::endl;
-            }
+            int mid = min +  (max-min) * predict(state);
+
+            //std::cout << ">" << mid << std::endl;
+            if (mid == min)
+                mid++;
+            if (mid == max)
+                mid--;
+            assert(mid >= min);
+            assert(mid <= max);
             if (val >= mid) {
                 bit = true;
                 min = mid;
@@ -257,17 +250,44 @@ namespace pack
             }
             pupdate(bit, state);
             while ((max-min) < 256) {
-                if(bit)max--; //why?
-                val = (val << 8) & 0xffff00 | reader.reader_u8();
+                //if(bit)max--;
+                val = (val << 8) & 0xffff00 | reader.read_u8();
                 min = (min << 8) & 0xffff00;
-                max = ((max << 8) & 0xffff00 ) ;
-                if (min >= max) max = 0x1000000;
+                max = (max << 8) & 0xffff00 ;
+                if (min >= max) max = 0xffffff;
+            }
+            return bit;
+        }
+
+        int get_symbol(int is_signed)
+        {
+            if (get(symbol_state[0]))
+                return 0;
+            else
+            {
+                int i, e;
+                unsigned a;
+                e = 0;
+                while (get(symbol_state[1 + ffmpeg::FFMIN(e, 9)]))
+                { // 1..10
+                    e++;
+                    if (e > 31)
+                        throw std::runtime_error("AVERROR_INVALIDDATA");
+                }
+
+                a = 1;
+                for (i = e - 1; i >= 0; i--)
+                    a += a + get(symbol_state[22 + ffmpeg::FFMIN(i, 9)]); // 22..31
+
+                e = -(is_signed && get(symbol_state[11 + ffmpeg::FFMIN(e, 10)])); // 11..21
+                return (a ^ e) - e;
             }
         }
 
-
         private:
             Reader<Iterator> reader;
+            int val = 0;
+
     };
 
 

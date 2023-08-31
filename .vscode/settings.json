@@ -90,8 +90,12 @@
         "functional": "cpp",
         "map": "cpp",
         "xtree": "cpp",
-        "semaphore": "cpp"
+        "semaphore": "cpp",
+        "format": "cpp",
+        "forward_list": "cpp",
+        "xlocbuf": "cpp"
     },
     "cmake.configureOnOpen": true,
+    "cmake.saveBeforeBuild": true,
 
 }

@@ -1,12 +1,11 @@
 #pragma once
 #include <iostream>
-
-
 #include <cstdint>
 #include <iterator>
 #include <vector>
 #include <stdexcept>
 #include <cassert>
+#include "utils.hpp"
 
 namespace pack {
 
@@ -377,6 +376,32 @@ public:
 
         return bit;
     }
+
+        int get_symbol(int is_signed)
+        {
+            if (get(symbol_state[0]))
+                return 0;
+            else
+            {
+                int i, e;
+                unsigned a;
+                e = 0;
+                while (get(symbol_state[1 + ffmpeg::FFMIN(e, 9)]))
+                { // 1..10
+                    e++;
+                    if (e > 31)
+                        throw std::runtime_error("AVERROR_INVALIDDATA");
+                }
+
+                a = 1;
+                for (i = e - 1; i >= 0; i--)
+                    a += a + get(symbol_state[22 + ffmpeg::FFMIN(i, 9)]); // 22..31
+
+                e = -(is_signed && get(symbol_state[11 + ffmpeg::FFMIN(e, 10)])); // 11..21
+                return (a ^ e) - e;
+            }
+        }
+
 
 private:
     Reader<Iterator> reader;

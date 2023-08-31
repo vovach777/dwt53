@@ -221,7 +221,6 @@ public:
             throw std::range_error("End of data reached");
         }
         auto value =  *beginIt++;
-        std::cout << "CABAC input: " << (int)value << std::endl;
         return value;
     }
     uint16_t read_u16r() {
@@ -239,7 +238,7 @@ public:
     void seek_to_end() {
         beginIt = endIt;
     }
-    void is_end() {
+    bool is_end() {
         return beginIt == endIt;
     }
 

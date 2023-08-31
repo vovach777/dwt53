@@ -100,19 +100,19 @@ int main() {
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
     //auto data = make_gradient(1024,1024,0,128,128,255);
-    auto data = lenna;
-     //auto data = make_sky(1920,1080);
-     //auto data = make_random(512);
+    //auto data = lenna;
+     //auto data = make_sky(64,64);
+     auto data = make_random(1024);
      //cubicBlur3x3(data);
      // cubicBlur3x3(data);
-     //auto data = make_probability(1920,1080,0.02,255);
+     //auto data = make_probability(8,8,0.1,1);
      //cubicBlur3x3(data);
 
-    dwt2d::Transform codec;
-    codec.prepare_transform(max_levels, wavelet, data);
-    codec.forward();
-    codec.quantization(3);
-    data = codec.get_data();
+    // dwt2d::Transform codec;
+    // codec.prepare_transform(max_levels, wavelet, data);
+    // codec.forward();
+    // codec.quantization(4);
+    // data = codec.get_data();
 
 
 
@@ -122,7 +122,7 @@ int main() {
     DMC_compressor  enc_dmc;
     auto enc_dmc_state = enc_dmc.defaultState();
 
-    RangeCoderCompressor enc_range;
+    RangeCoder_compressor enc_range;
     auto enc_range_state = enc_range.defaultState();
 
 
@@ -138,22 +138,25 @@ int main() {
 
     auto t1 = high_resolution_clock::now();
     for (auto v : flatten_data ) {
-        enc_dmc.put_symbol(v,1);
+        enc_dmc.put_symbol(v,0);
     }
+    auto enc_dmc_data = enc_dmc.finish();
     auto t2 = high_resolution_clock::now();
     std::cout << "DMC:\t" << duration_cast<milliseconds>(t2 - t1).count() << std::endl;
 
     t1 = high_resolution_clock::now();
     for (auto v : flatten_data ) {
-        enc_range.put_symbol(v, 1);
+        enc_range.put_symbol(v, 0);
     }
+    auto enc_range_data = enc_range.finish();
     t2 = high_resolution_clock::now();
     std::cout << "RANGE:\t" << duration_cast<milliseconds>(t2 - t1).count() << std::endl;
 
     t1 = high_resolution_clock::now();
     for (auto v : flatten_data ) {
-        enc_cabac.put_symbol(v,1);
+        enc_cabac.put_symbol(v,0);
     }
+    auto enc_cabac_data = enc_cabac.finish();
     t2 = high_resolution_clock::now();
     std::cout << "CABAC:\t" << duration_cast<milliseconds>(t2 - t1).count() << std::endl;
 
@@ -163,10 +166,66 @@ int main() {
     auto data_energy = matrix_energy(data);
 
     std::cout << "Predict\t" << flatten_data.size() << " -> " << data_energy << std::endl;
-    std::cout << "CABAC\t"  <<  flatten_data.size() << " -> " << enc_cabac.finish().size() << std::endl;
-    std::cout << "DMC\t"    << flatten_data.size() << " -> " << enc_dmc.finish().size()  << " nodes: " << enc_dmc.get_nodes_count() << std::endl;
-    std::cout << "RANGE\t"  << flatten_data.size() << " -> " << enc_range.finish().size() << std::endl;
+    std::cout << "CABAC\t"  <<  flatten_data.size() << " -> " << enc_cabac_data.size() << std::endl;
+    std::cout << "DMC\t"    << flatten_data.size() << " -> " << enc_dmc_data.size()  << " nodes: " << enc_dmc.get_nodes_count() << std::endl;
+    std::cout << "RANGE\t"  << flatten_data.size() << " -> " << enc_range_data.size() << std::endl;
 
+    //decoding...
+    H265_decompressor dec_cabac(enc_cabac_data.begin(), enc_cabac_data.end());
+    auto dec_cabac_state = dec_cabac.defaultState();
+
+    DMC_decompressor  dec_dmc(enc_dmc_data.begin(), enc_dmc_data.end());
+    dec_dmc.reset_model(3000000);
+    auto dec_dmc_state = dec_dmc.defaultState();
+
+    auto dec_range = RangeCoder_decompressor(enc_range_data.begin(), enc_range_data.end());
+    auto dec_range_state = dec_range.defaultState();
+
+    std::cout << "Decoding..." << std::endl;
+
+    try {
+
+    t1 = high_resolution_clock::now();
+    for (auto v : flatten_data ) {
+        if ( v != dec_range.get_symbol(0) ) {
+
+            throw std::runtime_error("decode fail!");
+        }
+    }
+    t2 = high_resolution_clock::now();
+    std::cout << "RANGE:\t" << duration_cast<milliseconds>(t2 - t1).count() << std::endl;
+    } catch (const std::exception & e) {
+        std::cerr << "RANGE fail: " << e.what() << std::endl;    }
+    try {
+
+    t1 = high_resolution_clock::now();
+    for (auto v : flatten_data ) {
+        if ( v != dec_cabac.get_symbol(0) ) {
+
+            throw std::runtime_error("decode fail!");
+        }
+    }
+    t2 = high_resolution_clock::now();
+    std::cout << "CABAC:\t" << duration_cast<milliseconds>(t2 - t1).count() << std::endl;
+    } catch (const std::exception & e) {
+        std::cerr << "CABAC fail: " << e.what() << std::endl;
+    }
+
+
+    try {
+
+    t1 = high_resolution_clock::now();
+    for (auto v : flatten_data ) {
+        if ( v != dec_dmc.get_symbol(0) ) {
+
+            throw std::runtime_error("decode fail!");
+        }
+    }
+    t2 = high_resolution_clock::now();
+    std::cout << "DMC:\t" << duration_cast<milliseconds>(t2 - t1).count() << std::endl;
+    } catch (const std::exception & e) {
+        std::cerr << "DMC fail: " << e.what() << std::endl;
+    }
 
 
 

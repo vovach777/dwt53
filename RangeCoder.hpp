@@ -1,9 +1,10 @@
 #include <cstdint>
 #include <vector>
 #include <stdexcept>
+#include <cassert>
 #include "utils.hpp"
 
-namespace ffmpeg
+namespace pack
 {
 
     class RangeCoderBase
@@ -61,7 +62,7 @@ namespace ffmpeg
           }
     };
 
-    class RangeCoderCompressor : public RangeCoderBase
+    class RangeCoder_compressor : public RangeCoderBase
     {
     protected:
         std::vector<uint8_t> bytestream;
@@ -101,13 +102,13 @@ namespace ffmpeg
         }
 
     public:
-        RangeCoderCompressor() : RangeCoderBase() {}
+        RangeCoder_compressor() : RangeCoderBase() {}
         inline size_t get_rac_count()
         {
             auto x = bytestream.size() + outstanding_count;
             if (outstanding_byte >= 0)
                 x++;
-            return 8 * x - av_log2(range);
+            return 8 * x - ffmpeg::av_log2(range);
         }
 
         inline void put(bool bit, uint8_t &state) {
@@ -142,8 +143,8 @@ namespace ffmpeg
 
             if (v)
             {
-                const int a = FFABS(v);
-                const int e = av_log2(a);
+                const int a = ffmpeg::FFABS(v);
+                const int e = ffmpeg::av_log2(a);
                 put_rac(symbol_state[0], 0);
                 if (e <= 9)
                 {
@@ -160,11 +161,11 @@ namespace ffmpeg
                 else
                 {
                     for (i = 0; i < e; i++)
-                        put_rac(symbol_state[1 + FFMIN(i, 9)], 1); // 1..10
+                        put_rac(symbol_state[1 + ffmpeg::FFMIN(i, 9)], 1); // 1..10
                     put_rac(symbol_state[ 1 + 9], 0);
 
                     for (i = e - 1; i >= 0; i--)
-                        put_rac(symbol_state[22 + FFMIN(i, 9)], (a >> i) & 1); // 22..31
+                        put_rac(symbol_state[22 + ffmpeg::FFMIN(i, 9)], (a >> i) & 1); // 22..31
 
                     if (is_signed)
                         put_rac(symbol_state[11 + 10], v < 0); // 11..21
@@ -188,7 +189,7 @@ namespace ffmpeg
 
          */
 
-        /* Return the number of bytes written. */
+        /* Return bytes written. */
         std::vector<uint8_t> finish()
         {
             range = 0xFF;
@@ -197,13 +198,24 @@ namespace ffmpeg
             range = 0xFF;
             renorm_encoder();
             std::vector<uint8_t> res;
-            std::swap(bytestream, res);
+            res.swap(bytestream);
             return res;
         }
+        inline size_t get_bytes_count() {
+            return bytestream.size();
+        }
+        inline  std::vector<uint8_t> get_bytes()
+        {
+            std::vector<uint8_t> res;
+            res.swap(bytestream);
+            bytestream.reserve(res.capacity());
+            return res;
+        }
+
     };
 
     template <typename Iterator>
-    class RangeCoderDecompressor : public RangeCoderBase
+    class RangeCoder_decompressor : public RangeCoderBase
     {
     protected:
         Reader<Iterator> reader;
@@ -217,19 +229,19 @@ namespace ffmpeg
                 low <<= 8;
                 if (reader.is_end())
                     overread++;
-                 else 
+                 else
                     low += reader.read_u8();
             }
         }
 
     public:
-        RangeCoderDecompressor(Iterator begin, Iterator end) : RangeCoderBase(), reader(begin, end)
+        RangeCoder_decompressor(Iterator begin, Iterator end) : RangeCoderBase(), reader(begin, end)
         {
-            low = reader.read_u16();
+            low = reader.read_u16r();
             if (low >= 0xFF00)
             {
                 low = 0xFF00;
-                reader.end();
+                reader.seek_to_end();
             }
         }
 
@@ -262,7 +274,7 @@ namespace ffmpeg
                 int i, e;
                 unsigned a;
                 e = 0;
-                while (get_rac(symbol_state[1 + FFMIN(e, 9)]))
+                while (get_rac(symbol_state[1 + ffmpeg::FFMIN(e, 9)]))
                 { // 1..10
                     e++;
                     if (e > 31)
@@ -271,19 +283,11 @@ namespace ffmpeg
 
                 a = 1;
                 for (i = e - 1; i >= 0; i--)
-                    a += a + get_rac(symbol_state[22 + FFMIN(i, 9)]); // 22..31
+                    a += a + get_rac(symbol_state[22 + ffmpeg::FFMIN(i, 9)]); // 22..31
 
-                e = -(is_signed && get_rac(symbol_state[11 + FFMIN(e, 10)])); // 11..21
+                e = -(is_signed && get_rac(symbol_state[11 + ffmpeg::FFMIN(e, 10)])); // 11..21
                 return (a ^ e) - e;
             }
         }
     };
-}
-
-namespace pack {
-    using RangeCoderCompressor = ffmpeg::RangeCoderCompressor;
-
-    template <typename Iterator>
-    using RangeCoderDecompressor = ffmpeg::RangeCoderDecompressor<Iterator>;
-
 }

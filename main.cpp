@@ -122,7 +122,7 @@ int main() {
     DMC_compressor  enc_dmc;
     auto enc_dmc_state = enc_dmc.defaultState();
 
-    RangeCoderCompressor enc_range;
+    RangeCoder_compressor enc_range;
     auto enc_range_state = enc_range.defaultState();
 
 
@@ -178,7 +178,7 @@ int main() {
     dec_dmc.reset_model(3000000);
     auto dec_dmc_state = dec_dmc.defaultState();
 
-    auto dec_range = RangeCoderDecompressor(enc_range_data.begin(), enc_range_data.end());
+    auto dec_range = RangeCoder_decompressor(enc_range_data.begin(), enc_range_data.end());
     auto dec_range_state = dec_range.defaultState();
 
     std::cout << "Decoding..." << std::endl;

@@ -62,7 +62,7 @@ namespace pack
           }
     };
 
-    class RangeCoderCompressor : public RangeCoderBase
+    class RangeCoder_compressor : public RangeCoderBase
     {
     protected:
         std::vector<uint8_t> bytestream;
@@ -102,7 +102,7 @@ namespace pack
         }
 
     public:
-        RangeCoderCompressor() : RangeCoderBase() {}
+        RangeCoder_compressor() : RangeCoderBase() {}
         inline size_t get_rac_count()
         {
             auto x = bytestream.size() + outstanding_count;
@@ -189,7 +189,7 @@ namespace pack
 
          */
 
-        /* Return the number of bytes written. */
+        /* Return bytes written. */
         std::vector<uint8_t> finish()
         {
             range = 0xFF;
@@ -198,13 +198,24 @@ namespace pack
             range = 0xFF;
             renorm_encoder();
             std::vector<uint8_t> res;
-            std::swap(bytestream, res);
+            res.swap(bytestream);
             return res;
         }
+        inline size_t get_bytes_count() {
+            return bytestream.size();
+        }
+        inline  std::vector<uint8_t> get_bytes()
+        {
+            std::vector<uint8_t> res;
+            res.swap(bytestream);
+            bytestream.reserve(res.capacity());
+            return res;
+        }
+
     };
 
     template <typename Iterator>
-    class RangeCoderDecompressor : public RangeCoderBase
+    class RangeCoder_decompressor : public RangeCoderBase
     {
     protected:
         Reader<Iterator> reader;
@@ -224,7 +235,7 @@ namespace pack
         }
 
     public:
-        RangeCoderDecompressor(Iterator begin, Iterator end) : RangeCoderBase(), reader(begin, end)
+        RangeCoder_decompressor(Iterator begin, Iterator end) : RangeCoderBase(), reader(begin, end)
         {
             low = reader.read_u16r();
             if (low >= 0xFF00)

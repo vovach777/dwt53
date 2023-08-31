@@ -74,8 +74,12 @@ namespace pack
         }
 
 
-        void reset_model(int maxnodes)
+        void reset_model(int maxnodes, int threshold = 2, int bigthresh = 2, bool reset_on_overflow=true)
         {
+            this->threshold = threshold;
+            this->bigthresh = bigthresh;
+            this->reset_on_overflow = reset_on_overflow;
+            this->maxnodes = maxnodes;
             for (int j = 0; j < 256; j++)
             {
                 for (int i = 0; i < 127; i++)
@@ -94,9 +98,16 @@ namespace pack
                 }
             }
             nodebuf.clear();
-            nodebuf.shrink_to_fit();
-            nodebuf.reserve(maxnodes);
+            nodebuf.reserve( maxnodes );
+            if ( nodebuf.capacity() > maxnodes*2) {
+                    nodebuf = std::vector<node>();
+                    nodebuf.reserve(maxnodes);
+            }
             std::fill(std::begin(symbol_state), std::end(symbol_state), defaultState() );
+        }
+
+        inline void reset_model() {
+            reset_model(nodebuf.capacity(), threshold, bigthresh, reset_on_overflow);
         }
     protected:
 
@@ -120,24 +131,41 @@ namespace pack
 
         void pupdate(bool b, StateType & state)
         {
-            if ( nodebuf.size() < nodebuf.capacity() &&
-                state->count[b] >= threshold &&
-                state->next[b]->count[0]+state->next[b]->count[1] >= bigthresh + state->count[b])
+            auto& count_b = state->count[b];
+            auto& count_next_b = state->next[b]->count;
+            auto  count_next_b_sum = count_next_b[0]+count_next_b[1];
+            if (
+                count_b >= threshold &&
+                count_next_b_sum >= bigthresh + count_b)
             {
-                node *new_ = &nodebuf.emplace_back();
-                const float r = state->count[b]/(state->next[b]->count[1]+state->next[b]->count[0]);
-                state->next[b]->count[0] -= new_->count[0] = state->next[b]->count[0] * r;
-                state->next[b]->count[1] -= new_->count[1] = state->next[b]->count[1] * r;
-                new_->next[0] = state->next[b]->next[0];
-                new_->next[1] = state->next[b]->next[1];
-                state->next[b] = new_;
+                if ( nodebuf.size() < maxnodes )
+                {
+                    node *new_ = &nodebuf.emplace_back();
+                    const float r = count_b/count_next_b_sum;
+                    const float new_c0 = new_->count[0] = count_next_b[0] * r;
+                    const float new_c1 = new_->count[1] = count_next_b[1] * r;
+
+                    count_next_b[0] -= new_c0;
+                    count_next_b[1] -= new_c1;
+
+                    new_->next[0] = state->next[b]->next[0];
+                    new_->next[1] = state->next[b]->next[1];
+                    state->next[b] = new_;
+                } else {
+                    if ( reset_on_overflow ) {
+                        reset_model();
+                        state = defaultState();
+                    }
+                }
             }
-            state->count[b] += 1;
+            state->count[b] += 1.0f;
             state = state->next[b];
         }
 
-        static constexpr float threshold = 2;
-        static constexpr float bigthresh = 2;
+        int threshold = 2;
+        int bigthresh = 2;
+        size_t maxnodes = 0x100000;
+        bool reset_on_overflow = true;
         int max = 0xffffff;
         int min = 0;
         StateType symbol_state[32];
@@ -168,6 +196,27 @@ namespace pack
                 if (min >= max) max = 0xffffff;
             }
         }
+        template<uint32_t bits>
+        void put_symbol_bits(uint32_t value)
+        {
+            auto mask = 1 << (bits-1);
+            for (int i = 0; i < bits; i++) {
+                put(value & mask, symbol_state[i]);
+                mask >>= 1;
+            }
+        }
+
+        template<uint32_t bits>
+        void put_symbol_bits_single(uint32_t value)
+        {
+            auto mask = 1 << (bits-1);
+            while (mask) {
+                put(value & mask, symbol_state[0]);
+                mask >>= 1;
+            }
+        }
+
+
         void put_symbol(int v, int is_signed)
         {
             int i;
@@ -208,6 +257,17 @@ namespace pack
             }
         }
 
+        inline size_t get_bytes_count() {
+            return bytestream.size();
+        }
+        inline  std::vector<uint8_t> get_bytes()
+        {
+            std::vector<uint8_t> res;
+            res.swap(bytestream);
+            bytestream.reserve(res.capacity());
+            return res;
+        }
+
 
         std::vector<uint8_t> finish() {
             //std::cout << "DMC nodes: " << get_nodes_count() << std::endl;
@@ -215,7 +275,7 @@ namespace pack
             bytestream.push_back( (min >> 8) & 0xff);
             bytestream.push_back(  min & 0xff);
             std::vector<uint8_t> res;
-            std::swap(res,bytestream);
+            res.swap(bytestream);
             return res;
         }
         private:
@@ -289,8 +349,6 @@ namespace pack
             int val = 0;
 
     };
-
-
 
 
 } // namespace pack

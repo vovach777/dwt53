@@ -1,0 +1,3 @@
+[submodule "myargs"]
+	path = myargs
+	url = https://github.com/vovach777/myargs.git

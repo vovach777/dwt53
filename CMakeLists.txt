@@ -35,4 +35,13 @@ add_executable(dmc_compressor
     dmc.hpp
     utils.hpp
     mio.hpp
+    myargs/myargs.hpp
+)
+
+add_executable(range_compressor
+    range_compressor.cpp
+    rangecoder.hpp
+    utils.hpp
+    mio.hpp
+    myargs/myargs.hpp
 )

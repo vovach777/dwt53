@@ -58,7 +58,7 @@ int main(int argc, char ** argv) {
             if (s > 0 && part > 0 && part_packed > 0 )
             {
                 auto speed_mbs = static_cast<size_t>(part / s) >> 20;
-                std::cout << "\r"  << (pos >> 20) << " -> " << (compressed_size >> 20) <<  " MB, speed: " << speed_mbs  << " MB/s,  ratio:" << (part / part_packed)  << ":1 , nodes: " << dmc.get_nodes_count() << "        \b\b\b\b\b\b\b\b" << std::flush;
+                std::cout << "\r"  << (pos >> 20) << " -> " << (compressed_size >> 20) <<  " MB, speed: " << speed_mbs  << " MB/s,  ratio: " << (part / part_packed)  << ":1 , nodes: " << dmc.get_nodes_count() << "        \b\b\b\b\b\b\b\b" << std::flush;
             }
             t1 = high_resolution_clock::now();
         }

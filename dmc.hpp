@@ -123,6 +123,7 @@ namespace pack
                 nodebuf = std::vector<node>();
                 nodebuf.reserve(maxnodes);
             }
+            maxnodes = nodebuf.capacity();
         }
 
         inline void reset_model()

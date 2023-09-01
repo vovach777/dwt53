@@ -99,5 +99,10 @@
     },
     "cmake.configureOnOpen": true,
     "cmake.saveBeforeBuild": true,
-
+    "cmake.debugConfig": {
+        "args": [
+            "D:\\Sources\\C++\\Projects\\my_compress\\enwik9",
+            "-n64000000","-t8", "-T64"
+        ]
+    }
 }

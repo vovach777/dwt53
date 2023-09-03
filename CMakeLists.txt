@@ -45,3 +45,8 @@ add_executable(range_compressor
     mio.hpp
     myargs/myargs.hpp
 )
+
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+#target_compile_definitions(dmc_compressor PRIVATE CMAKE_EXPORT_COMPILE_COMMANDS=1)

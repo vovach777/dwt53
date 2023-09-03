@@ -1,17 +1,10 @@
 {
     "configurations": [
+
         {
-            "name": "Win32",
-            "includePath": [
-                "${default}"
-            ],
-            "defines": [
-                "_DEBUG",
-                "UNICODE",
-                "_UNICODE"
-            ],
-            "windowsSdkVersion": "10.0.19041.0",
-            "cStandard": "c17"
+            "name": "CMake",
+            "compileCommands": "${command:cmake.buildDirectory}/compile_commands.json",
+            "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],
     "version": 4

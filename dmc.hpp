@@ -71,20 +71,16 @@ namespace pack
 
         using StateType = node *;
 
-        StateType defaultState()
-        {
-            return &nodes[0][0];
-        }
+    
 
         DMCModel()
         {
-            state = defaultState();
             reset_model(0x10000);
         }
 
         DMCModel(int maxnodes, int threshold = 2, int bigthresh = 2, bool reset_on_overflow = true)
         {
-            state = defaultState();
+        
             reset_model(maxnodes, threshold, bigthresh, reset_on_overflow);
         }
 
@@ -93,29 +89,13 @@ namespace pack
             return nodebuf.size();
         }
 
-        void reset_model(int maxnodes, int threshold = 2, int bigthresh = 2, bool reset_on_overflow = true)
+        void reset_model(int maxnodes, int threshold = 1, int bigthresh = 8, bool reset_on_overflow = true)
         {
             this->threshold = threshold;
             this->bigthresh = bigthresh;
             this->reset_on_overflow = reset_on_overflow;
             this->maxnodes = maxnodes;
-            for (int j = 0; j < 256; j++)
-            {
-                for (int i = 0; i < 127; i++)
-                {
-                    nodes[j][i].count[0] = 0.2;
-                    nodes[j][i].count[1] = 0.2;
-                    nodes[j][i].next[0] = &nodes[j][2 * i + 1];
-                    nodes[j][i].next[1] = &nodes[j][2 * i + 2];
-                }
-                for (int i = 127; i < 255; i++)
-                {
-                    nodes[j][i].count[0] = 0.2;
-                    nodes[j][i].count[1] = 0.2;
-                    nodes[j][i].next[0] = &nodes[i + 1][0];
-                    nodes[j][i].next[1] = &nodes[i - 127][0];
-                }
-            }
+      
             nodebuf.clear();
             nodebuf.reserve(maxnodes);
             if (nodebuf.capacity() > maxnodes * 2)
@@ -124,6 +104,11 @@ namespace pack
                 nodebuf.reserve(maxnodes);
             }
             maxnodes = nodebuf.capacity();
+            state = &nodebuf.emplace_back();
+            state->count[0] = 0.2;
+            state->count[1] = 0.2;
+            state->next[0] = state;
+            state->next[1] = state;
         }
 
         inline void reset_model()
@@ -133,7 +118,7 @@ namespace pack
 
         inline float predict() const
         {
-            return state->count[0] / (state->count[0] + state->count[1]);
+            return state->count[1]  / (state->count[0] + state->count[1]);
         }
 
         void update_model(bool b)
@@ -141,22 +126,28 @@ namespace pack
             if (!(!reset_on_overflow && nodebuf.size() == maxnodes))
             {
 
-                auto &count_b = state->count[b];
-                auto &count_next_b = state->next[b]->count;
+                auto count_b = state->count[b];
+                auto count_next_b = state->next[b]->count;
                 auto count_next_b_sum = count_next_b[0] + count_next_b[1];
-                if (
-                    count_b >= threshold &&
+                if ( count_b >= threshold &&
                     count_next_b_sum >= bigthresh + count_b)
                 {
                     if (nodebuf.size() < maxnodes)
                     {
                         node *new_ = &nodebuf.emplace_back();
-                        const float r = count_b / count_next_b_sum;
-                        const float new_c0 = new_->count[0] = count_next_b[0] * r;
-                        const float new_c1 = new_->count[1] = count_next_b[1] * r;
+                        const auto r = count_b / count_next_b_sum;
+                        const auto new_c0 = new_->count[0] =  count_next_b[0] * r;
+                        const auto new_c1 = new_->count[1] =  count_next_b[1] * r;
+                    
 
-                        count_next_b[0] -= new_c0;
-                        count_next_b[1] -= new_c1;
+                        state->next[b]->count[0] = ffmpeg::FFMAX( count_next_b[0] - new_c0, 0.2f);
+                        state->next[b]->count[1] = ffmpeg::FFMAX( count_next_b[1] - new_c1, 0.2f);
+                    
+                        assert(state->next[b]->count[0] > 0);
+                        assert(state->next[b]->count[0] > 0);
+                        assert(new_c0 > 0);
+                        assert(new_c1 > 0);
+                    
 
                         new_->next[0] = state->next[b]->next[0];
                         new_->next[1] = state->next[b]->next[1];
@@ -167,7 +158,6 @@ namespace pack
                         if (reset_on_overflow)
                         {
                             reset_model();
-                            state = defaultState();
                         }
                     }
                 }
@@ -177,15 +167,12 @@ namespace pack
         }
 
     private:
-        std::vector<std::vector<node>> nodes =
-            std::vector<std::vector<node>>(256, std::vector<node>(256));
-
         std::vector<node> nodebuf;
         StateType state;
 
         int threshold = 2;
         int bigthresh = 2;
-        size_t maxnodes = 0x100000;
+        size_t maxnodes = 0x10000000;
         bool reset_on_overflow = true;
     };
 
@@ -340,6 +327,7 @@ namespace pack
     public:
         using ModelID = int;
 
+
         constexpr DMC_decompressor(Iterator begin, Iterator end, const DMCModelConfig &config) : reader(begin, end)
         {
             val = reader.read_u24r();
@@ -442,7 +430,7 @@ namespace pack
 
         void put(int bit)
         {
-            const uint32_t p = Discretize( 1 - model.predict() );
+            const uint32_t p = Discretize( model.predict() );
             const uint32_t xmid = x1_ + ((x2_ - x1_) >> 16) * p +
                                   (((x2_ - x1_) & 0xffff) * p >> 16);
             if (bit)
@@ -463,6 +451,45 @@ namespace pack
             }
         }
 
+       void put_symbol(int v, int is_signed)
+        {
+            int i;
+
+            if (v)
+            {
+                const int a = ffmpeg::FFABS(v);
+                const int e = ffmpeg::av_log2(a);
+                put(0);
+                if (e <= 9)
+                {
+                    for (i = 0; i < e; i++)
+                        put(1); // 1..10
+                    put(0);
+
+                    for (i = e - 1; i >= 0; i--)
+                        put((a >> i) & 1); // 22..31
+
+                    if (is_signed)
+                        put(v < 0); // 11..21
+                }
+                else
+                {
+                    for (i = 0; i < e; i++)
+                        put(1); // 1..10
+                    put(0);
+
+                    for (i = e - 1; i >= 0; i--)
+                        put((a >> i) & 1); // 22..31
+
+                    if (is_signed)
+                        put(v < 0); // 11..21
+                }
+            }
+            else
+            {
+                put(1);
+            }
+        }
         inline size_t get_bytes_count()
         {
             return bytestream.size();
@@ -494,6 +521,10 @@ namespace pack
             return model.get_nodes_count();
         }
 
+        void reset_model() {
+            model.reset_model();
+        }
+
     private:
         inline void WriteByte(uint8_t byte)
         {
@@ -508,6 +539,94 @@ namespace pack
         uint32_t x1_, x2_;
         DMCModel model;
         std::vector<uint8_t> bytestream;
+    };
+
+    template <typename Iterator>
+    class Decoder_decompressor {
+        public:
+        Decoder_decompressor(Iterator begin, Iterator end, const DMCModelConfig &config) : reader(begin, end), model(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow), x1_(0), x2_(0xffffffff), x_(0)
+        {
+            for (int i = 0; i < 4; ++i) {
+                x_ = (x_ << 8) + ( reader.is_end() ? 0 : reader.read_u8());
+            }
+        }
+        Decoder_decompressor(const Reader<Iterator> & reader, const DMCModelConfig &config) : reader(reader), model(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow), x1_(0), x2_(0xffffffff), x_(0)
+        {
+            for (int i = 0; i < 4; ++i) {
+                x_ = (x_ << 8) + ( this->reader.is_end() ? 0 : this->reader.read_u8());
+            }
+        }
+
+        bool get() {
+            const uint32_t p = Discretize(model.predict());
+            const uint32_t xmid = x1_ + ((x2_ - x1_) >> 16) * p +
+                (((x2_ - x1_) & 0xffff) * p >> 16);
+            int bit = 0;
+            if (x_ <= xmid) {
+                bit = 1;
+                x2_ = xmid;
+            } else {
+                x1_ = xmid + 1;
+            }
+            
+            model.update_model(bit);
+
+            while (((x1_^x2_) & 0xff000000) == 0) {
+                x1_ <<= 8;
+                x2_ = (x2_ << 8) + 255;
+                x_ = (x_ << 8) + ReadByte();
+            }
+            return bit;
+        }
+
+        template <uint32_t bits>
+        uint32_t get_symbol_bits()
+        {
+            int res = 0;
+            for (int i = 0; i < bits; i++)
+            {
+                res = res + res + get();
+            }
+            return res;
+        }
+
+        int get_symbol(int is_signed)
+        {
+            if (get())
+                return 0;
+            else
+            {
+                int i, e;
+                unsigned a;
+                e = 0;
+                while (get())
+                { // 1..10
+                    e++;
+                    if (e > 31)
+                        throw std::runtime_error("AVERROR_INVALIDDATA");
+                }
+
+                a = 1;
+                for (i = e - 1; i >= 0; i--)
+                    a += a + get(); // 22..31
+
+                e = -(is_signed && get()); // 11..21
+                return (a ^ e) - e;
+            }
+        }
+
+        private:
+            inline uint8_t ReadByte() {
+                return reader.is_end() ? 0 : reader.read_u8();
+            }
+
+            inline uint32_t Discretize(float p) {
+                return 1 + 65534 * p;
+            }
+
+        uint32_t x1_, x2_, x_;
+        Reader<Iterator> reader;
+        DMCModel model;
     };
 
 } // namespace pack

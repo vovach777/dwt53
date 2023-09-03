@@ -25,6 +25,11 @@ inline auto FFMIN(T1 a, T2 b) {
     return std::min<T1>(a,b);
 }
 
+template<typename T1, typename T2>
+inline auto FFMAX(T1 a, T2 b) {
+    return std::max<T1>(a,b);
+}
+
 /*
 
  * Define AV_[RW]N helper macros to simplify definitions not provided
@@ -234,6 +239,12 @@ public:
             val |= read_u8();
         return val;
     }
+    template <typename T>
+    const T* read() {
+        auto res = reinterpret_cast<const T*>(&*beginIt);
+        beginIt += sizeof(T);
+        return res;
+    }
 
     void seek_to_end() {
         beginIt = endIt;
@@ -241,7 +252,6 @@ public:
     bool is_end() {
         return beginIt == endIt;
     }
-
 private:
     Iterator beginIt;
     Iterator endIt;

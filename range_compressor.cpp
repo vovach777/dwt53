@@ -1,5 +1,5 @@
 #include <string>
-#include "rangecoder.hpp"
+#include "RangeCoder.hpp"
 #include "mio.hpp"
 
 int main(int argc, char ** argv) {
@@ -16,10 +16,10 @@ int main(int argc, char ** argv) {
     }
     size_t compressed_size = 0;
     for (auto symbol :  mmap) {
-        rac.put_symbol(symbol,0);
+        rac.put_symbol(static_cast<int>(symbol),0);
         if (rac.get_bytes_count() > 0x10000) {
             compressed_size += rac.get_bytes().size();
-            std::cout << "\r      \rcompression " << compressed_size << std::flush;
+            std::cout << "\r      \rcompression " << (compressed_size >> 20) << std::flush;
         }
     }
     auto bytes = rac.finish();

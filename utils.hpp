@@ -252,6 +252,15 @@ public:
     bool is_end() {
         return beginIt == endIt;
     }
+    inline Iterator begin() {
+        return beginIt;
+    }
+    inline Iterator end() {
+        return endIt;
+    }
+    uint8_t operator *() {
+        return (is_end()) ? 0 : *beginIt;
+    }
 private:
     Iterator beginIt;
     Iterator endIt;

@@ -3,10 +3,7 @@
     "cmake.saveBeforeBuild": true,
     "cmake.debugConfig": {
         "args": [
-            "adpcm.wav.dmc", "-d", "adpcm.wav"
+            "test1.txt", "-n99887766554433221100","-k","-c"
         ]
-    },
-    "files.associations": {
-        "__locale": "cpp"
     }
 }

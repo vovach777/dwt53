@@ -53,9 +53,9 @@ namespace pack
 {
     struct DMCModelConfig
     {
-        int maxnodes = 0x100000;
-        int threshold = 2;
-        int bigthresh = 2;
+        size_t maxnodes = 0x100000;
+        uint8_t threshold = 2;
+        uint8_t bigthresh = 2;
         bool reset_on_overflow = true;
     };
 
@@ -71,7 +71,7 @@ namespace pack
 
         using StateType = node *;
 
-    
+
 
         DMCModel()
         {
@@ -80,7 +80,7 @@ namespace pack
 
         DMCModel(int maxnodes, int threshold = 2, int bigthresh = 2, bool reset_on_overflow = true)
         {
-        
+
             reset_model(maxnodes, threshold, bigthresh, reset_on_overflow);
         }
 
@@ -95,7 +95,7 @@ namespace pack
             this->bigthresh = bigthresh;
             this->reset_on_overflow = reset_on_overflow;
             this->maxnodes = maxnodes;
-      
+
             nodebuf.clear();
             nodebuf.reserve(maxnodes);
             if (nodebuf.capacity() > maxnodes * 2)
@@ -105,8 +105,8 @@ namespace pack
             }
             maxnodes = nodebuf.capacity();
             state = &nodebuf.emplace_back();
-            state->count[0] = 0.2;
-            state->count[1] = 0.2;
+            state->count[0] = 1;
+            state->count[1] = 1;
             state->next[0] = state;
             state->next[1] = state;
         }
@@ -123,7 +123,7 @@ namespace pack
 
         void update_model(bool b)
         {
-            if (!(!reset_on_overflow && nodebuf.size() == maxnodes))
+            if (!(!reset_on_overflow && nodebuf.size() == maxnodes)  || true)
             {
 
                 auto count_b = state->count[b];
@@ -138,16 +138,16 @@ namespace pack
                         const auto r = count_b / count_next_b_sum;
                         const auto new_c0 = new_->count[0] =  count_next_b[0] * r;
                         const auto new_c1 = new_->count[1] =  count_next_b[1] * r;
-                    
 
-                        state->next[b]->count[0] = ffmpeg::FFMAX( count_next_b[0] - new_c0, 0.2f);
-                        state->next[b]->count[1] = ffmpeg::FFMAX( count_next_b[1] - new_c1, 0.2f);
-                    
+
+                        state->next[b]->count[0] = ffmpeg::FFMAX( count_next_b[0] - new_c0, 1.0f);
+                        state->next[b]->count[1] = ffmpeg::FFMAX( count_next_b[1] - new_c1, 1.0f);
+
                         assert(state->next[b]->count[0] > 0);
                         assert(state->next[b]->count[0] > 0);
                         assert(new_c0 > 0);
                         assert(new_c1 > 0);
-                    
+
 
                         new_->next[0] = state->next[b]->next[0];
                         new_->next[1] = state->next[b]->next[1];
@@ -158,6 +158,19 @@ namespace pack
                         if (reset_on_overflow)
                         {
                             reset_model();
+                        } else {
+                            extend_count++;
+                            if (extend_count == (maxnodes>>8)+256) {
+                                extend_count = 0;
+                                state =  &nodebuf[ rand_xor() % maxnodes ];
+                                //std::cout << std::endl;
+                            }
+                            // std::cout << std::endl << deep << std::endl;
+                            // char in;
+                            // std::cin >> in;
+                            // if (in == 'y') {
+                            //     state = nodebuf.data();
+                            // }
                         }
                     }
                 }
@@ -174,243 +187,16 @@ namespace pack
         int bigthresh = 2;
         size_t maxnodes = 0x10000000;
         bool reset_on_overflow = true;
+        int extend_count = 0;
+        uint32_t rand_xor() {
+            seed ^= (seed << 13);
+            seed ^= (seed >> 17);
+            seed ^= (seed << 5);
+            return seed;
+            }
+        uint32_t seed = 0x55555555;
     };
 
-    template <int models_nb = 1>
-    class DMC_compressor
-    {
-    public:
-        using ModelID = int;
-        DMC_compressor() {}
-        constexpr DMC_compressor(const DMCModelConfig &config)
-        {
-            for (int i = 0; i < models_nb; ++i)
-                models.emplace_back(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow);
-        }
-
-        inline void put(bool bit, ModelID model_id)
-        {
-
-            auto &model = models.at(model_id);
-
-            int mid = min + (max - min) * model.predict();
-            model.update_model(bit);
-
-            if (mid == min)
-                mid++;
-            if (mid == max)
-                mid--;
-            assert(mid >= min);
-            assert(mid <= max);
-            if (bit)
-            {
-                min = mid;
-            }
-            else
-            {
-                max = mid;
-            }
-            while ((max - min) < 256)
-            {
-                bytestream.push_back((min >> 16) & 0xff);
-                min = (min << 8) & 0xffff00;
-                max = ((max << 8) & 0xffff00);
-                if (min >= max)
-                    max = 0xffffff;
-            }
-        }
-        template <uint32_t bits>
-        void put_symbol_bits(uint32_t value)
-        {
-            auto mask = 1 << (bits - 1);
-            for (int i = 0; i < bits; i++)
-            {
-                put(value & mask, i % models_nb);
-                mask >>= 1;
-            }
-        }
-
-        template <uint32_t bits>
-        void put_symbol_bits(uint32_t value, ModelID model_id)
-        {
-            auto mask = 1 << (bits - 1);
-            while (mask)
-            {
-                put(value & mask, model_id);
-                mask >>= 1;
-            }
-        }
-
-        void put_symbol(int v, int is_signed)
-        {
-            int i;
-
-            if (v)
-            {
-                const int a = ffmpeg::FFABS(v);
-                const int e = ffmpeg::av_log2(a);
-                put(0, 0);
-                if (e <= 9)
-                {
-                    for (i = 0; i < e; i++)
-                        put(1, (1 + i) % models_nb); // 1..10
-                    put(0, (1 + i) % models_nb);
-
-                    for (i = e - 1; i >= 0; i--)
-                        put((a >> i) & 1, (22 + i) % models_nb); // 22..31
-
-                    if (is_signed)
-                        put(v < 0, (11 + e) % models_nb); // 11..21
-                }
-                else
-                {
-                    for (i = 0; i < e; i++)
-                        put(1, (1 + ffmpeg::FFMIN(i, 9)) % models_nb); // 1..10
-                    put(0, (1 + 9) % models_nb);
-
-                    for (i = e - 1; i >= 0; i--)
-                        put((a >> i) & 1, (22 + ffmpeg::FFMIN(i, 9)) % models_nb); // 22..31
-
-                    if (is_signed)
-                        put(v < 0, (11 + 10) % models_nb); // 11..21
-                }
-            }
-            else
-            {
-                put(1, 0);
-            }
-        }
-
-        inline size_t get_bytes_count()
-        {
-            return bytestream.size();
-        }
-        inline std::vector<uint8_t> get_bytes()
-        {
-            std::vector<uint8_t> res;
-            res.swap(bytestream);
-            bytestream.reserve(res.capacity());
-            return res;
-        }
-
-        std::vector<uint8_t> finish()
-        {
-            // std::cout << "DMC nodes: " << get_nodes_count() << std::endl;
-            bytestream.push_back((min >> 16) & 0xff);
-            bytestream.push_back((min >> 8) & 0xff);
-            bytestream.push_back(min & 0xff);
-            std::vector<uint8_t> res;
-            res.swap(bytestream);
-            return res;
-        }
-
-        size_t get_nodes_count() const
-        {
-            size_t result = 0;
-            for (const auto &model : models)
-            {
-                result += model.get_nodes_count();
-            }
-            return result;
-        }
-
-    private:
-        std::vector<uint8_t> bytestream;
-        std::vector<DMCModel> models;
-        int max = 0xffffff;
-        int min = 0;
-    };
-
-    template <int models_nb, typename Iterator>
-    class DMC_decompressor
-    {
-    public:
-        using ModelID = int;
-
-
-        constexpr DMC_decompressor(Iterator begin, Iterator end, const DMCModelConfig &config) : reader(begin, end)
-        {
-            val = reader.read_u24r();
-            for (int i = 0; i < models_nb; ++i)
-                models.emplace_back(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow);
-        }
-        inline bool get(ModelID model_id)
-        {
-            bool bit;
-            auto &model = models.at(model_id);
-            int mid = min + (max - min) * model.predict();
-
-            // std::cout << ">" << mid << std::endl;
-            if (mid == min)
-                mid++;
-            if (mid == max)
-                mid--;
-            assert(mid >= min);
-            assert(mid <= max);
-            if (val >= mid)
-            {
-                bit = true;
-                min = mid;
-            }
-            else
-            {
-                bit = false;
-                max = mid;
-            }
-            model.update_model(bit);
-            while ((max - min) < 256)
-            {
-                // if(bit)max--;
-                val = (val << 8) & 0xffff00 | reader.read_u8();
-                min = (min << 8) & 0xffff00;
-                max = (max << 8) & 0xffff00;
-                if (min >= max)
-                    max = 0xffffff;
-            }
-            return bit;
-        }
-
-        int get_symbol(int is_signed)
-        {
-            if (get(0))
-                return 0;
-            else
-            {
-                int i, e;
-                unsigned a;
-                e = 0;
-                while (get((1 + ffmpeg::FFMIN(e, 9)) % models_nb))
-                { // 1..10
-                    e++;
-                    if (e > 31)
-                        throw std::runtime_error("AVERROR_INVALIDDATA");
-                }
-
-                a = 1;
-                for (i = e - 1; i >= 0; i--)
-                    a += a + get((22 + ffmpeg::FFMIN(i, 9)) % models_nb); // 22..31
-
-                e = -(is_signed && get((11 + ffmpeg::FFMIN(e, 10)) % models_nb)); // 11..21
-                return (a ^ e) - e;
-            }
-        }
-
-        size_t get_nodes_count()
-        {
-            size_t result = 0;
-            for (const auto &model : models)
-            {
-                result += model.get_nodes_count();
-            }
-        }
-
-    private:
-        Reader<Iterator> reader;
-        int max = 0xffffff;
-        int min = 0;
-        int val = 0;
-        std::vector<DMCModel> models;
-    };
 
     class Encoder_compressor
     {
@@ -568,7 +354,7 @@ namespace pack
             } else {
                 x1_ = xmid + 1;
             }
-            
+
             model.update_model(bit);
 
             while (((x1_^x2_) & 0xff000000) == 0) {
@@ -613,6 +399,10 @@ namespace pack
                 e = -(is_signed && get()); // 11..21
                 return (a ^ e) - e;
             }
+        }
+
+        inline auto position() {
+            return reader.begin();
         }
 
         private:

@@ -56,7 +56,16 @@ int main(int argc, char **argv)
         config.reset_on_overflow = false;
         config.threshold = 4;
         config.bigthresh = 32;
+    } else if (args["profile"] == "enwik9")
+    {
+        bit_planes = false;
+        classic = true;
+        config.maxnodes = 400000000;
+        config.threshold = 2;
+        config.bigthresh = 64;
+        config.reset_on_overflow = false;
     }
+    
 
     std::ofstream output;
     if (args.size() >= 3)

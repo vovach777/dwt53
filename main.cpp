@@ -6,6 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include "myargs/myargs.hpp"
 
 #include "dwt53.hpp"
 #include "the_matrix.hpp"
@@ -17,6 +18,10 @@
 #include "cabacH265.hpp"
 #include "bitstream.hpp"
 #include "bitstream_helper.hpp"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 using namespace pack;
 
 the_matrix lenna = {
@@ -98,16 +103,82 @@ void test(V && data, S && description ) {
     test_compress_decompress(std::forward<V>(data));
 }
 
+std::vector<the_matrix> load_image_as_yuv420(const char * img) {
+    int width, height, num_channels;
+    unsigned char* bitmap = stbi_load(img, &width, &height, &num_channels, 0);
+    if (bitmap == NULL || width * height == 0 || num_channels == 0 || num_channels > 4)
+    {
+        throw std::logic_error("load image error!");
+    }
+    std::vector<the_matrix> result;
+    switch (num_channels)  {
+        case 2:
+        case 1: {
+            result.emplace_back(height, std::vector<int>(width));
+            if ( num_channels == 2) {
+                result.emplace_back(height, std::vector<int>(width));
+            }
+            uint8_t* gray8_p = bitmap;
+            for (int h=0; h<height; h++)
+            for (int x=0; x<width; x++)
+            {
+                result[0][h][x] = *gray8_p++;
+                if (num_channels == 2) {
+                    result[1][h][x] = *gray8_p++;
+                }
+            }
+            }
+            break;
+        case 3:
+        case 4:
+            {
+                uint8_t* rgb_p = bitmap;
+                result.emplace_back(height, std::vector<int>(width));
+                result.emplace_back(height>>1, std::vector<int>(width>>1));
+                result.emplace_back(height>>1, std::vector<int>(width>>1));
+                if (num_channels == 4)
+                    result.emplace_back(height, std::vector<int>(width));
+                int stride = num_channels * width;
+
+                for (int h=0; h<height; h++)
+                for (int x=0; x<width; x++)
+                {
+                    //luma
+                    result[0][h][x] = +0.29900f*rgb_p[0] + 0.58700f*rgb_p[1] + 0.11400f*rgb_p[2];
+                    if (num_channels == 4)
+                        result[3][h][x] = rgb_p[3];
+                    //subsampling
+                    if ( ( (h|x)&1 ) == 0 ) {
+                        auto rgb01_p = x+1 < width  ? rgb_p+num_channels : rgb_p;
+                        auto rgb10_p = h+1 < height ? rgb_p+stride : rgb_p;
+                        auto rgb11_p = x+1 < width && h+1 < height ? rgb_p+stride+num_channels : rgb_p;
+                        int r = (rgb_p[0] + rgb01_p[0] + rgb10_p[0] + rgb11_p[0]) / 4;
+                        int g = (rgb_p[1] + rgb01_p[1] + rgb10_p[1] + rgb11_p[1]) / 4;
+                        int b = (rgb_p[2] + rgb01_p[2] + rgb10_p[2] + rgb11_p[2]) / 4;
+                        //chroma
+                        result[1][h>>1][x>>1] = -0.16874f*r - 0.33126f*g + 0.50000f*b + 128;
+                        result[2][h>>1][x>>1] = +0.50000f*r - 0.41869f*g - 0.08131f*b + 128;
+                    }
+                    rgb_p += num_channels;
+                }
+            }
+    }
+    free(bitmap);
+    return result;
+}
 
 
-int main() {
+int main(int argc, char**argv) {
     int max_levels = 8;
     dwt2d::Wavelet wavelet = dwt2d::dwt53;
+    using myargs::Args;
+    Args args;
+    args.parse(argc, argv);
     //auto data = make_envelope(32,32,200);
     // cubicBlur3x3(data);
     // cubicBlur3x3(data);
     //auto data = make_gradient(1024,1024,0,128,128,255);
-    auto data = lenna;
+    //auto data = lenna;
      //auto data = make_sky(64,64);
      //auto data = make_random(1024);
      //cubicBlur3x3(data);
@@ -115,11 +186,15 @@ int main() {
      //auto data = make_probability(8,8,0.1,1);
      //cubicBlur3x3(data);
     dwt2d::Transform dwt;
-    dwt.prepare_transform(max_levels, wavelet, data);
-    auto & transformed = dwt.forward();
-    dwt.quantization(2);
-    test( transformed, "wavelet q=2");
+    auto v = load_image_as_yuv420(args[1].data());
 
+    for (auto& data : v )
+    {
+        dwt.prepare_transform(max_levels, wavelet, data);
+        auto & transformed = dwt.forward();
+        dwt.quantization(2);
+        test( transformed, "wavelet q=2");
+    }
 
 
 

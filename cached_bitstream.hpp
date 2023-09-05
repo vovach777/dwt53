@@ -54,8 +54,9 @@ inline int bits_priv_refill_64_be()
  */
 inline int bits_priv_refill_32_be()
 {
-    if (ptr >= buffer_end)
+    if (ptr >= buffer_end) {
         return -1;
+    }
     bits |= (uint64_t)av_bswap32((((const union unaligned_32 *) (ptr))->l)) << (32 - bits_valid);
     ptr += 4;
     bits_valid += 32;

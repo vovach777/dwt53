@@ -47,10 +47,11 @@ union unaligned_16 { uint16_t l; } __attribute__((packed)) __attribute__((may_al
  * @param  p bit position to clip at
  * @return clipped value
  */
-static __attribute__((always_inline))  __attribute__((const)) unsigned av_mod_uintp2_c(unsigned a, unsigned p)
+inline __attribute__((const)) unsigned av_mod_uintp2_c(unsigned a, unsigned p)
 {
     return a & ((1U << p) - 1);
 }
+
 
 inline __attribute__((const)) int sign_extend(int val, unsigned bits)
 {

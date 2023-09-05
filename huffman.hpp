@@ -19,7 +19,7 @@
 #include "bitstream_helper.hpp"
 
 namespace pack {
-    namespace impl {
+    namespace huffman_impl {
     using namespace std;
     // A Huffman
     template <typename T = char>
@@ -305,6 +305,5 @@ namespace pack {
     };
     }
     //export section
-    template <typename T = char>
-    using Huffman = impl::Huffman<T>;
+    using huffman_impl::Huffman;
 }

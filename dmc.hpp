@@ -198,10 +198,10 @@ namespace pack
     };
 
 
-    class Encoder_compressor
+    class DMC_compressor
     {
     public:
-        Encoder_compressor(const DMCModelConfig &config) : model(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow), x1_(0), x2_(0xffffffff) {}
+        DMC_compressor(const DMCModelConfig &config) : model(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow), x1_(0), x2_(0xffffffff) {}
 
         template <uint32_t bits>
         void put_symbol_bits(uint32_t value)
@@ -328,15 +328,15 @@ namespace pack
     };
 
     template <typename Iterator>
-    class Decoder_decompressor {
+    class DMC_decompressor {
         public:
-        Decoder_decompressor(Iterator begin, Iterator end, const DMCModelConfig &config) : reader(begin, end), model(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow), x1_(0), x2_(0xffffffff), x_(0)
+        DMC_decompressor(Iterator begin, Iterator end, const DMCModelConfig &config) : reader(begin, end), model(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow), x1_(0), x2_(0xffffffff), x_(0)
         {
             for (int i = 0; i < 4; ++i) {
                 x_ = (x_ << 8) + ( reader.is_end() ? 0 : reader.read_u8());
             }
         }
-        Decoder_decompressor(const Reader<Iterator> & reader, const DMCModelConfig &config) : reader(reader), model(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow), x1_(0), x2_(0xffffffff), x_(0)
+        DMC_decompressor(const Reader<Iterator> & reader, const DMCModelConfig &config) : reader(reader), model(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow), x1_(0), x2_(0xffffffff), x_(0)
         {
             for (int i = 0; i < 4; ++i) {
                 x_ = (x_ << 8) + ( this->reader.is_end() ? 0 : this->reader.read_u8());

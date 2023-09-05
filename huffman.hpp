@@ -19,7 +19,7 @@
 #include "bitstream_helper.hpp"
 
 namespace pack {
-    namespace impl {
+    namespace huffman_impl {
     using namespace std;
     // A Huffman
     template <typename T = char>
@@ -72,43 +72,45 @@ namespace pack {
        public:
         void encodeHuffmanTree(BitWriter& dest) {
             if (DHT.size() == 0) throw std::domain_error("No DHT found!");
-
-            ValueWriter vw(dest);
-
-            vw.encode_golomb(5,DHT.size());
+            //std::cout << std::endl;
+            dest.set_ur_golomb(DHT.size(),5,10,16);
             for (int i = 0; i < DHT.size(); i++) {
                 ///dest.writeBits(8, DHT[i].size());
-                vw.encode_golomb(3, DHT[i].size());
+                dest.set_ur_golomb(DHT[i].size(),3,10,16);
+                if ( DHT[i].size() == 0)
+                    continue;
+                //cout << i << " (" << DHT[i].size() << ") :";
                 for (auto symbol : DHT[i]) {
                     auto catindex = to_jpair(symbol);
                     dest.writeBits(4, catindex & 0xf);
                     if ( catindex > 0)
                         dest.writeBits(catindex & 0xf, catindex >> 4);
+                    //cout << symbol << ",";
                 }
+                //std::cout << std::endl;
             }
         }
 
         void decodeHuffmanTree(BitReader& src) {
             // decode huffman table
-            ValueReader vr(src);
             DHT.clear();
             //DHT.resize(src.readBits(8));
-            DHT.resize(vr.decode_golomb(5));
+            DHT.resize(src.get_ur_golomb(5,10,16));
             for (int i = 0; i < DHT.size(); i++) {
                 //DHT[i].resize(src.readBits(8));
-                DHT[i].resize(vr.decode_golomb(3));
+                DHT[i].resize(src.get_ur_golomb(3,10,16));
                 if (DHT[i].size() == 0) continue;
-                cout << i << " (" << DHT[i].size() << ") :";
+                //cout << i << " (" << DHT[i].size() << ") :";
                 // cout << "DHT_" << i << ":" << DHT[i].size() << endl;
                 for (auto& value : DHT[i]) {
                     auto cat = src.readBits(4);
                     auto index = cat == 0 ? 0 : src.readBits(cat);
                     value = from_jpair( make_jpair(cat, index) );
-                    cout << value << ",";
+                    //cout << value << ",";
                 }
-                cout << endl;
+                //cout << endl;
             }
-            cout << endl;
+            //cout << endl;
             create_lockup_table();  // need for encoder
             buildHuffmanTree();     // need for decoder
         }
@@ -257,8 +259,8 @@ namespace pack {
             for (auto it = begin; it != end; ++it) {
                 encode(dest, *it);
             }
-
-            std::cerr << "huffman_codes: " << dest << std::endl;
+            dest.flush();
+            //std::cerr << "huffman_codes: " << dest << std::endl;
         }
         inline void encode(BitWriter& dest, T value) {
             auto [bit_count, code] = huffmanCode.at(value);
@@ -266,7 +268,7 @@ namespace pack {
             //     dest.writeBit(code & 1);
             //     code >>= 1;
             // }
-            std::cout << "encoding " << (int)value << " => (" << (int)bit_count << "," << (int)code << ")" << std::endl;
+            //std::cout << "encoding " << (int)value << " => (" << (int)bit_count << "," << (int)code << ")" << std::endl;
             dest.writeBits(bit_count, code);
         }
 
@@ -303,6 +305,5 @@ namespace pack {
     };
     }
     //export section
-    template <typename T = char>
-    using Huffman = impl::Huffman<T>;
+    using huffman_impl::Huffman;
 }

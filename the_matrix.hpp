@@ -552,7 +552,7 @@ bool matrix_is_equal(const the_matrix &a, const the_matrix &b ) {
     for (int x=0;x<a[y].size(); ++x)
     {
         if (a[y][x] != b[y][x]) {
-            std::cerr << "a != b"  << std::endl << "a:" << a << "b:" << b;
+            //std::cerr << "a != b"  << std::endl << "a:" << a << "b:" << b;
             return false;
         }
     }

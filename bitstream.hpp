@@ -16,6 +16,24 @@ class BitWriter {
     inline void writeBit(bool value) { pb.put_bits(1,value);}
     inline void writeBit0() { writeBit(true);}
     inline void writeBit1() { writeBit(false);}
+
+    /**
+     * write unsigned golomb rice code (ffv1).
+     */
+    inline void set_ur_golomb(int i, int k, int limit,int esc_len)
+    {
+        int e;
+
+        if (i < 0)
+            throw std::logic_error("can not encode negative value!");
+
+        e = i >> k;
+        if (e < limit)
+            pb.put_bits( e + k + 1, (1 << k) + ffmpeg::av_mod_uintp2_c(i, k));
+        else
+            pb.put_bits( limit + esc_len, i - limit + 1);
+    }
+
     auto data() const {
         return  pb.buf;
     }
@@ -27,9 +45,12 @@ class BitWriter {
     std::vector<uint8_t> get_current_bytes() {
 
         std::vector<uint8_t> bytes;
-        std::swap(bytes, pb.bytes);
+        bytes.swap( pb.bytes );
+        bytes.resize( pb.put_bytes_output() );
 
-        pb = ffmpeg::PutBitContext();
+        pb.buf = nullptr;
+        pb.buf_end = nullptr;
+        pb.buf_ptr = nullptr;
 
         return bytes;
 
@@ -37,18 +58,19 @@ class BitWriter {
 
      std::vector<uint8_t> get_all_bytes() {
         pb.flush_put_bits();
+
         return get_current_bytes();
      }
 
     void flush() {
         pb.flush_put_bits();
+
     }
 
     // Метод для вывода данных (для проверки)
     void printBits( std::ostream& o) const {
-        auto count = size_in_bits();
-        for (auto it = data(), end=data()+size(); it != end; ++it ) {
-            auto byte = *it;
+        auto count = pb.put_bytes_output()*8;
+        for (auto byte : pb.bytes) {
             for (int i = 7; i >= 0; --i) {
                   if (count-- ==  0)
                     return;
@@ -77,6 +99,33 @@ class BitReader {
     inline ptrdiff_t left() {
         return bc.bits_left_be();
     }
+
+    /**
+     * read unsigned golomb rice code (ffv1).
+     */
+    inline int get_ur_golomb(int k, int limit,int esc_len)
+    {
+        unsigned int buf;
+        int log;
+
+        buf = bc.bits_peek_be(32);
+
+        log = ffmpeg::av_log2(buf);
+
+        if (log > 31 - limit) {
+            buf >>= log - k;
+            buf  += (30 - log) << k;
+            bc.bits_skip_be(32 + k - log);
+
+            return buf;
+        } else {
+            bc.bits_skip_be(limit);
+            buf = bc.bits_read_be(esc_len);
+
+            return buf + limit - 1;
+        }
+    }
+
     /**
      * Return buffer size in bits.
      */

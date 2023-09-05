@@ -6,14 +6,41 @@
 #include "myargs/myargs.hpp"
 #include <fstream>
 
+#ifdef _WIN32
+auto phys_mem() {
+    MEMORYSTATUSEX status;
+    status.dwLength = sizeof(status);
+
+    GlobalMemoryStatusEx(&status);
+
+    return status.ullTotalPhys;
+
+}
+#else
+#if __has_include(<unistd.h>)
+#include <unistd.h>
+    auto phys_mem() {
+        auto pageSize = sysconf(_SC_PAGESIZE);
+        auto physPages = sysconf(_SC_PHYS_PAGES);
+        return static_cast<uint64_t>(pageSize) * physPages;
+    }
+#else
+    auto phys_mem() {
+        return 640*1024;
+    }
+#endif
+#endif
+
+
+
 int main(int argc, char **argv)
 {
 
     using mio::mmap_source;
     using myargs::Args;
-    using pack::Decoder_decompressor;
+    using pack::DMC_decompressor;
     using pack::DMCModelConfig;
-    using pack::Encoder_compressor;
+    using pack::DMC_compressor;
     using std::chrono::duration;
     using std::chrono::duration_cast;
     using std::chrono::high_resolution_clock;
@@ -28,9 +55,12 @@ int main(int argc, char **argv)
     DMCModelConfig config;
 
     config.maxnodes = args.get('n',1ULL<<20, 1ULL, 1ULL << 31);
-    config.threshold = args.get('t', 2, 1, 512);
-    config.bigthresh = args.get('T', 2, 1, 512);
+    config.threshold = args.get('t', 2, 1, 255);
+    config.bigthresh = args.get('T', 2, 1, 255);
     config.reset_on_overflow = !args.has('k');
+
+
+    size_t max_nodes_phys =  static_cast<size_t>(phys_mem()*0.97f) / 64;
 
     std::error_code error;
     mio::ummap_source mmap = mio::make_mmap<mio::ummap_source>(args[1], 0, 0, error);
@@ -60,12 +90,12 @@ int main(int argc, char **argv)
     {
         bit_planes = false;
         classic = true;
-        config.maxnodes = 400000000;
+        config.maxnodes =  std::max<size_t>( 400000000ULL, max_nodes_phys);
         config.threshold = 2;
         config.bigthresh = 64;
         config.reset_on_overflow = false;
     }
-    
+
 
     std::ofstream output;
     if (args.size() >= 3)
@@ -93,9 +123,15 @@ int main(int argc, char **argv)
         std::cout << "\tthreshold: " << config->threshold << std::endl;
         std::cout << "\tbig thresh: " << config->bigthresh << std::endl;
         std::cout << "\twhen model overflow: " << (config->reset_on_overflow ? "reset" : "keep") << std::endl;
+        std::cout << "\tnodes:" << config->maxnodes << std::endl;
+        std::cout << "maximum nodes on this computer: " << max_nodes_phys << std::endl;
+        if ( config->maxnodes > max_nodes_phys ) {
+            std::cerr << "out of memory!" << std::endl;
+            return 1;
+        }
         auto t1 = high_resolution_clock::now();
         auto start_pos = reader.begin();
-        Decoder_decompressor dmc(reader, *config);
+        DMC_decompressor dmc(reader, *config);
         std::vector<uint8_t> buffer;
 
         for (uint64_t pos = 0; pos < file_size; ++pos) {
@@ -115,7 +151,7 @@ int main(int argc, char **argv)
     }
     else
     {
-        Encoder_compressor dmc(config);
+        DMC_compressor dmc(config);
         for (int bit_plane = 7; bit_plane >= 0; bit_plane--)
         {
             size_t pos = 0;

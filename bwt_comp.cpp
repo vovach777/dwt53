@@ -37,7 +37,7 @@ auto phys_mem() {
 #endif
 #endif
 
-uint64_t mtf64(uint64_t value) {
+uint64_t mtf64_encode(uint64_t value) {
     std::bitset<64> v64{value};
     bool front = false;
     for (int pos=63; pos >= 0; --pos) {
@@ -49,6 +49,16 @@ uint64_t mtf64(uint64_t value) {
         }
     }
 }
+
+uint64_t mtf64_decode(uint64_t value) {
+    std::bitset<64> v64{value};
+    bool front = false;
+    for (int pos=63; pos >= 0; --pos) {
+
+        front = v64[pos] =  ( v64[pos] ) ? !front : front;
+    }
+}
+
 
 int main(int argc, char **argv)
 {
@@ -97,6 +107,7 @@ int main(int argc, char **argv)
     {
 
         auto [val64, inx] = bwt_encode(*map64_p++);
+
 
 
 

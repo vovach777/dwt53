@@ -12,7 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_DEBUG} -Ofast")
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" )
-
+#set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/ppm8")
 
 
 add_definitions(-D_USE_MATH_DEFINES)
@@ -63,5 +63,18 @@ add_executable(dmc_compressor_img
     the_matrix.hpp
     )
 
+#find_library(Ppmd8_LIBRARY libPpmd8.a PATHS ${Ppmd8_LIBRARY_PATH})
+
 
 #target_compile_definitions(dmc_compressor PRIVATE CMAKE_EXPORT_COMPILE_COMMANDS=1)
+
+
+#add_executable(ppm8_compressor
+#    ppm8_compressor.cpp
+#    utils.hpp
+#    mio.hpp
+#    myargs/myargs.hpp
+#    ppm8/Ppmd8cpp.hpp
+#)
+
+#target_link_libraries(ppm8_compressor  ${Ppmd8_LIBRARY})

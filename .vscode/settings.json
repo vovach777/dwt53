@@ -3,7 +3,7 @@
     "cmake.saveBeforeBuild": true,
     "cmake.debugConfig": {
         "args": [
-            "D:\\Sources\\C++\\Projects\\dwt53\\build\\enwik9", "-t2", "-T2"
+            "D:\\Sources\\C++\\Projects\\dwt53\\build\\enwik9", "-s33"
         ]
     }
 }

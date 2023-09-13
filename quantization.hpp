@@ -7,15 +7,22 @@
 #include <utility>
 #include "utils.hpp"
 
+class Codebook {
+    public:
+    virtual int at(int v) const = 0; //lockup quantized value
+    virtual const std::vector<int>& get_codebook() const = 0; //all values
+    const int operator[](int v) const { return at(v); }
+};
 
-class scalar_adaptive_quantization
+
+class scalar_adaptive_quantization : public Codebook
 {
     public:
 
     scalar_adaptive_quantization() = default;
 
-    template <typename Iterator>
-    scalar_adaptive_quantization(Iterator begin, Iterator end, int Q, int n = 256, int d = 4 ) : n(n), Q(Q)
+    template <typename Iterator, typename init_code_book>
+    scalar_adaptive_quantization(Iterator begin, Iterator end, int Q, int n = 256, init_code_book initial_codebook = {-4,-3,-2,-1,0,1,2,3,4} ) : n(n), Q(Q), codebook(initial_codebook)
     {
 
         enabled = begin != end;
@@ -27,18 +34,20 @@ class scalar_adaptive_quantization
         center = lockup_table.data() + n;
         auto& histogram = lockup_table;
 
-        codebook.reserve(256);
+        codebook.reserve(n);
 
-        //preserve details
-        for (int i = -d; i <= d; ++i ) {
-            codebook.push_back(i);
-        }
+        // //preserve details
+        // for (int i = -d; i <= d; ++i ) {
+        //     codebook.push_back(i);
+        // }
 
         //build histogram
         for (auto it = begin; it != end; ++it)
         {
-            if (abs(*it) > d)
                 histogram[ std::clamp( *it + n,0, max_elem) ] += 1;
+        }
+        for (auto w : codebook) {
+            histogram[ std::clamp( w + n,0, max_elem) ] = 0;
         }
         quantization(histogram.data(), histogram.data()+histogram.size());
         //std::fill( histogram.begin(), histogram.end(), 0);
@@ -46,7 +55,7 @@ class scalar_adaptive_quantization
         std::sort(codebook.begin(),  codebook.end());
 
 
-        std::cout << "codebook: " << codebook;
+        //std::cout << "codebook: " << codebook;
 
         //lockup table generate
         for (int i=0; i<=max_elem; ++i)
@@ -56,14 +65,16 @@ class scalar_adaptive_quantization
         //std::cout << "lockup table: " << lockup_table;
     }
 
-    int at(int v) const {
+    int at(int v) const override {
         if (!enabled)
             return v;
         const int max_elem = static_cast<int>( lockup_table.size()-1 );
 
         return lockup_table[ std::clamp( v + n,0, max_elem) ];
-   }
-    const int operator[](int v) const { return at(v); }
+    }
+    const std::vector<int>& get_codebook() const override {
+        return codebook;
+    }
 
 private:
     void quantization(int* begin, int *end)

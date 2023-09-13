@@ -10,7 +10,7 @@
 #include "dmc.hpp"
 #include "cabacH265.hpp"
 #include "rangecoder.hpp"
-#include "bitstream_helper.hpp"
+#include "quantization.hpp"
 
 namespace pack {
 
@@ -132,6 +132,7 @@ inline std::vector<uint8_t> compress(const the_matrix& matrix) {
     enc.put_symbol(matrix[0].size(), 0); //width
     enc.put_symbol(matrix.size(), 0);  //height
 
+
     for (auto & row : matrix)
     for (auto & val : row)
         enc.put_symbol(val,1);
@@ -155,5 +156,135 @@ inline the_matrix decompress(const std::vector<uint8_t>& compressed) {
 }
 
 }
+
+namespace MTF {
+    inline std::vector<uint8_t> compress(const the_matrix& matrix) {
+        DMCModelConfig config;
+        config.threshold = 4;
+        config.bigthresh = 40;
+        config.reset_on_overflow = false;
+        config.maxnodes = 65536;
+        DMC_compressor enc(config);
+        auto range = get_range(matrix);
+        std::vector<int> mtf;
+        for (int i = range.min; i <= range.max; ++i) {
+             mtf.push_back(i);
+        }
+        enc.put_symbol(matrix[0].size(), 0); //width
+        enc.put_symbol(matrix.size(), 0);  //height
+        enc.put_symbol(range.min,1);
+        enc.put_symbol(range.max,1);
+
+        // enc.put_symbol(mtf.size(), 0);  //codebook size
+        // //codebook values
+        // auto scan_mtf = mtf.begin();
+        // int prev = *scan_mtf++;
+        // enc.put_symbol(prev,1);
+        // //enc.reset_model();
+
+        // while ( scan_mtf != mtf.end() ) {
+        //     enc.put_symbol(*scan_mtf - prev,0);
+        //     prev = *scan_mtf++;
+        // }
+
+        for (auto & row : matrix)
+        for (auto & val : row) {
+            //auto qval = quantizer[val];
+            auto it = std::find(mtf.begin(), mtf.end(), val); //find index
+            if ( it == mtf.end() ) { //if not such symbol
+                enc.put_symbol(0,0); // replace with prev symbol
+            } else {
+                enc.put_symbol(std::distance(mtf.begin(), it) ,0); //send index
+                if ( it != mtf.begin()) //update front
+                    std::rotate(mtf.begin(),it,it+1);
+            }
+        }
+
+        return enc.finish();
+    }
+
+inline the_matrix decompress(const std::vector<uint8_t>& compressed) {
+
+    DMCModelConfig config;
+    config.threshold = 4;
+    config.bigthresh = 40;
+    config.reset_on_overflow = false;
+    config.maxnodes = 65536;
+
+    DMC_decompressor dec(compressed.begin(), compressed.end(), config);
+
+
+    auto width = dec.get_symbol(0);
+    auto height = dec.get_symbol(0);
+    the_matrix matrix(height, std::vector<int>(width));
+    auto range_min = dec.get_symbol(1);
+    auto range_max = dec.get_symbol(1);
+    std::vector<int> mtf;
+    for (int i = range_min; i<= range_max; ++i)
+        mtf.push_back(i);
+
+    // std::vector<int> mtf( dec.get_symbol(0) );
+    // int prev = mtf[0] = dec.get_symbol(1);
+    // for (int i=1; i<mtf.size(); ++i) {
+    //     prev = mtf[i] = dec.get_symbol(0)  + prev;
+    // }
+
+
+    for (auto & row : matrix)
+    for (auto & val : row) {
+        int index = dec.get_symbol(0);
+        val = mtf.at( index );
+        auto it = mtf.begin() + index;
+        if ( it != mtf.begin()) //update front
+            std::rotate(mtf.begin(),it,it+1);
+
+    }
+
+    return matrix;
+
+}
+
+}
+
+
+inline uint64_t ror1_ip(uint64_t &x)
+{
+   return (x >> 1) | (x << 63);
+}
+
+
+uint64_t bwt_encode(uint64_t value) {
+
+    std::vector<uint64_t> v64(64);
+
+    for (auto &v : v64)
+        v = value = ror1_ip(value);
+    std::stable_sort(v64.begin(), v64.end());
+
+    uint64_t res = 0;
+    for (auto &v : v64)
+        res = res + res + (v&1);
+    return res;
+}
+
+template <typename ReadBit>
+uint64_t bwt_decode(uint64_t value) {
+
+    std::vector<uint64_t> v64(64, 0);
+
+    for (int pass=0; pass < 64; pass++)
+    {
+        for (int v = 63; v >= 0; --v)
+            v64[63-v] |= ((value >> v) & 1) << pass;
+        std::stable_sort(v64.begin(), v64.end());
+    }
+
+    int res = 0;
+    for (auto &v : v64)
+        res = res + res + (v&1);
+    return res;
+
+}
+
 
 }  // namespace pack

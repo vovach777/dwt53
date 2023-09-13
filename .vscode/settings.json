@@ -3,7 +3,7 @@
     "cmake.saveBeforeBuild": true,
     "cmake.debugConfig": {
         "args": [
-            "test1.txt", "-n99887766554433221100","-k","-c"
+            "D:\\Sources\\C++\\Projects\\dwt53\\build\\enwik9", "-t2", "-T2"
         ]
     }
 }

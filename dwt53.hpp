@@ -195,6 +195,7 @@ static void ihaar(int *x, int size, const int *L, const int *H) {
 
 #ifdef THE_MATRIX_DEFINED
 #include "quantization.hpp"
+#include <numeric>
 
 namespace dwt2d {
 
@@ -371,7 +372,9 @@ class Transform {
                                });
         };
 
-        auto lockup_table = scalar_adaptive_quantization(flat_data.begin(), flat_data.end(), Q, max_value, details );
+        std::vector<int> details_vec(details*2+1);
+        std::iota(details_vec.begin(), details_vec.end(), -details );
+        auto lockup_table = scalar_adaptive_quantization(flat_data.begin(), flat_data.end(), Q, max_value, details_vec );
 
 
         for (int level = 0; level < levels_; ++level) {

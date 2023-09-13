@@ -188,13 +188,6 @@ namespace pack
         size_t maxnodes = 0x10000000;
         bool reset_on_overflow = true;
         int extend_count = 0;
-        uint32_t rand_xor() {
-            seed ^= (seed << 13);
-            seed ^= (seed >> 17);
-            seed ^= (seed << 5);
-            return seed;
-            }
-        uint32_t seed = 0x55555555;
     };
 
 
@@ -203,10 +196,10 @@ namespace pack
     public:
         DMC_compressor(const DMCModelConfig &config) : model(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow), x1_(0), x2_(0xffffffff) {}
 
-        template <uint32_t bits>
-        void put_symbol_bits(uint32_t value)
+        template <int bits>
+        void put_symbol_bits(uint64_t value)
         {
-            auto mask = 1 << (bits - 1);
+            auto mask = 1ULL << (bits - 1);
             for (int i = 0; i < bits; i++)
             {
                 put(value & mask);

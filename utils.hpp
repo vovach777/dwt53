@@ -288,3 +288,20 @@ protected:
     T* _data;
     size_t _size;
 };
+
+    inline uint32_t rand_xor() {
+        static uint32_t seed = 0x55555555;
+        seed ^= (seed << 13);
+        seed ^= (seed >> 17);
+        seed ^= (seed << 5);
+        return seed;
+        }
+
+    inline  uint64_t rand_xor64() {
+       return  static_cast<uint64_t>(rand_xor()) << 32 | rand_xor();
+    }
+
+inline uint64_t ror1_ip(uint64_t &x)
+{
+   return (x >> 1) | (x << 63);
+}

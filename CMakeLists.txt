@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(dwt53 CXX)
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -12,6 +12,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 #set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_DEBUG} -Ofast")
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" )
+
+
 
 add_definitions(-D_USE_MATH_DEFINES)
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)
@@ -28,6 +30,9 @@ add_executable(example_compress_decompress
     utils.hpp
     dmc.hpp
     rangecoder.hpp
+    stb_image.h
+    img_load.hpp
+    packmatrix.hpp
 )
 
 add_executable(dmc_compressor
@@ -44,9 +49,19 @@ add_executable(range_compressor
     utils.hpp
     mio.hpp
     myargs/myargs.hpp
-)
+    )
 
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+add_executable(dmc_compressor_img
+    dmc_compressor_img.cpp
+    dmc.hpp
+    utils.hpp
+    mio.hpp
+    myargs/myargs.hpp
+    stb_image.h
+    img_load.hpp
+    the_matrix.hpp
+    )
+
 
 #target_compile_definitions(dmc_compressor PRIVATE CMAKE_EXPORT_COMPILE_COMMANDS=1)

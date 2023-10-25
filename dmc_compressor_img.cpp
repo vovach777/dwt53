@@ -107,6 +107,7 @@ inline std::vector<uint8_t> compress(const std::vector<the_matrix>& planes, bool
                     // enc.put_symbol( delta, 1);
                     const int delta = int_to_tinyint( plane[h+i][x] - predict_lines[i] );
                     predict_lines[i] = std::clamp( predict_lines[i] + tinyint_to_int(delta),0,255);
+                    enc.put_symbol(delta, 1);
 
                 }
             }
@@ -245,7 +246,7 @@ int main(int argc, char **argv)
     Args args;
     args.parse(argc, argv);
     if (args.size() < 2) {
-        std::cout << "usage: \tdmc_img [-d] [-100] [-p<log2_lines>] <image_in> [image_out]\n";
+        std::cout << "usage: \tdmc_img [-d] [--100] [-p<log2_lines>] <image_in> [image_out]\n";
         return 1;
     }
     if (!args.has('d')) {

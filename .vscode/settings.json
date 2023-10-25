@@ -3,10 +3,8 @@
     "cmake.saveBeforeBuild": true,
     "cmake.debugConfig": {
         "args": [
-            "--mono",
-            "-d",
-            "D:\\Sources\\C++\\Projects\\dwt53\\build\\sine440-mono.raw.sfht",
-            "D:\\Sources\\C++\\Projects\\dwt53\\build\\debug.raw",
+            "D:\\Sources\\C++\\Projects\\dwt53\\build\\480px-Lenna-24.bmp",
+            "D:\\Sources\\C++\\Projects\\dwt53\\build\\debug.dmc",
         ]
     },
     "cmake.configureSettings": {

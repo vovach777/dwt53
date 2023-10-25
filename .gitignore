@@ -33,3 +33,8 @@
 build/
 ppm8/
 ppm8_compressor.cpp
+webcam/
+escapi/
+E2LSH-0.1/
+alglib-cpp/
+.trash/

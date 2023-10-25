@@ -5,17 +5,29 @@
    #define STBI_NO_PSD
    #define STBI_NO_PIC
 #include "stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 #include <vector>
 #include <stdexcept>
 #include "the_matrix.hpp"
+#include "timed.hpp"
+
+inline stbi_uc *stbi_load_timed(char const *filename, int *x, int *y, int *comp, int req_comp)
+{
+    profiling::timed stb_load("load image (stb)");
+    return stbi_load(filename, x,y,comp,req_comp);
+}
 
 inline std::vector<the_matrix> load_image_as_yuv420(const char * img) {
     int width, height, num_channels;
-    unsigned char* bitmap = stbi_load(img, &width, &height, &num_channels, 0);
+    unsigned char* bitmap = stbi_load_timed(img, &width, &height, &num_channels, 0);
     if (bitmap == NULL || width * height == 0 || num_channels == 0 || num_channels > 4)
     {
         throw std::logic_error("load image error!");
     }
+    profiling::timed convert_to_yuv420("component loader");
     std::vector<the_matrix> result;
     switch (num_channels)  {
         case 2:
@@ -73,3 +85,91 @@ inline std::vector<the_matrix> load_image_as_yuv420(const char * img) {
     return result;
 }
 
+#ifndef stbi__float2fixed
+#define stbi__float2fixed(x)  (((int) ((x) * 4096.0f + 0.5f)) << 8)
+#endif
+template <typename T>
+static void YCbCr_to_RGB(int y, int cb, int cr,  T& r_, T& g_, T& b_)
+{
+      int y_fixed = (y << 20) + (1<<19); // rounding
+      int r,g,b;
+      cr -= 128;
+      cb -= 128;
+      r = y_fixed +  cr* stbi__float2fixed(1.40200f);
+      g = y_fixed + (cr*-stbi__float2fixed(0.71414f)) + ((cb*-stbi__float2fixed(0.34414f)) & 0xffff0000);
+      b = y_fixed                                     +   cb* stbi__float2fixed(1.77200f);
+      r >>= 20;
+      g >>= 20;
+      b >>= 20;
+      if ((unsigned) r > 255) { if (r < 0) r = 0; else r = 255; }
+      if ((unsigned) g > 255) { if (g < 0) g = 0; else g = 255; }
+      if ((unsigned) b > 255) { if (b < 0) b = 0; else b = 255; }
+      r_ = r;
+      g_ = g;
+      b_ = b;
+}
+
+
+static void save_rgb(const char * img, uint8_t* rgb, int width, int height, int stride, int nb_channel)
+{
+   size_t i = strlen(img)-1;
+   if (i > 3) {
+      if (
+         tolower(img[i-2]) == 'p' &&
+         tolower(img[i-1]) == 'n' &&
+         tolower(img[i])   == 'g') {
+         stbi_write_png(img, width,height, nb_channel, rgb, stride);
+         return;
+      };
+      if (
+         tolower(img[i-2]) == 'j' &&
+         tolower(img[i-1]) == 'p' &&
+         tolower(img[i])   == 'g') {
+         stbi_write_jpg (img, width,height, nb_channel, rgb, 100);
+         return;
+      };
+      if (
+         tolower(img[i-2]) == 't' &&
+         tolower(img[i-1]) == 'g' &&
+         tolower(img[i])   == 'a') {
+         stbi_write_tga(img, width,height, nb_channel, rgb);
+         return;
+      };
+   }
+   stbi_write_bmp(img,width,height,nb_channel,rgb);
+}
+
+
+inline void store_image_as_yuv420(const std::vector<the_matrix> planes, const char * img) {
+
+    int planes_nb = planes.size();
+    auto height = planes[0].size();
+    auto width = planes[0][0].size();
+    std::vector<uint8_t> rgb( height * width * planes_nb );
+    auto stride = width*planes_nb;
+    auto chroma_h_log2 = planes_nb < 3 ? 0 : (planes[1].size() == height ? 0 : (  (planes[1].size() == (height+1>>1)) ? 1 : (planes[1].size() == (height+1>>2)) ? 2 : 3  ));
+    auto chroma_w_log2 = planes_nb < 3 ? 0 : (planes[1][0].size() == width ? 0 : (  (planes[1][0].size() == (width+1>>1)) ? 1 : (planes[1][0].size() == (width+1>>2)) ? 2 : 3  ));
+    //std::cout << "yuv -> rgb" << " " << width << "x" << height <<  std::endl;
+    auto rgb_p = rgb.data();
+    for (int h=0; h < height; ++h)
+    for (int x=0; x < width;  ++x)
+    {
+        //auto rgb_p = &rgb[h*stride+x*3];
+        if (planes_nb < 3) {
+            *rgb_p++ =  planes[0][ h ][ x ];
+            if (planes_nb == 2)
+                *rgb_p++ =  planes[1][ h ][ x ];
+        } else {
+            auto y = planes[0][ h ][ x ];
+            auto u = planes[1][h>>chroma_h_log2][x>>chroma_w_log2];
+            auto v = planes[2][h>>chroma_h_log2][x>>chroma_w_log2];
+            YCbCr_to_RGB(y,u,v, rgb_p[0],rgb_p[1],rgb_p[2]);
+            if (planes_nb == 4)
+                rgb_p[3] = planes[3][ h ][ x ];
+            rgb_p += planes_nb;
+        }
+
+    }
+
+    save_rgb(img,rgb.data(), width, height, stride, planes_nb);
+}

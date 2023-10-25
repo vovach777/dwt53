@@ -1,10 +1,11 @@
+#pragma once
 #include <utility>
 #include <vector>
 #include <cstdint>
 #include <algorithm>
 #include "utils.hpp"
 
-inline std::pair<uint64_t, uint8_t> bwt_encode(uint64_t value) {
+inline std::pair<uint64_t, uint8_t> bbwt64_encode(uint64_t value) {
 
     std::vector<uint64_t> v64(64);
     auto val = value;
@@ -31,7 +32,7 @@ bool comp_tuples(const std::pair<bool, int>& a, const std::pair<bool, int> &b) {
 	return (a.first < b.first);
 }
 
-inline uint64_t bwt_decode(uint64_t value, int j) {
+inline uint64_t bbwt64_decode(uint64_t value, int j) {
 
     std::vector<std::pair<bool,int>> v64;
 
@@ -75,4 +76,30 @@ uint64_t mtf64_decode(uint64_t value) {
     }
     return v64.to_ullong();
 
+}
+
+
+template <typename Iterator>
+inline size_t bwt_encode(Iterator begin, Iterator end) {
+    using T = decltype(*begin);
+
+    std::vector<std::vector<T>> ror( std::distance(begin,end));
+
+    auto vec = std::vector<T>(begin,end);
+    ror.push_back(vec);
+    for (int i=1; i< ror.size() ) {
+        std::rotate(vec.rbegin(), vec.rbegin() + 1, vec.rend());
+        ror.push_back(vec);
+    }
+    auto it1 = vec.begin();
+    std::stable_sort(ror.begin(), ror.end());
+    int res_index = std::distance(vec.begin(), it1);
+
+    uint64_t res = 0;
+    int index = 0;
+    uint8_t res_index = 255;
+    for (auto v : ror) {
+        *begin++= v.back();
+    }
+    return res_index;
 }

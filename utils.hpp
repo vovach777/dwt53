@@ -8,6 +8,15 @@
 #endif
 
 
+struct Range {
+    int min;
+    int max;
+};
+
+#ifndef DUMMY
+    #define DUMMY
+#endif
+
 namespace ffmpeg {
 
 template <typename T>
@@ -90,7 +99,7 @@ inline uint64_t __attribute__((const)) av_bswap64(uint64_t x)
 
  inline int av_log2(uint32_t x) {
     return (31 - __builtin_clz((x)|1));
- }
+}
 
 }
 
@@ -262,6 +271,11 @@ public:
     uint8_t operator *() {
         return (is_end()) ? 0 : *beginIt;
     }
+    auto operator++(int) {
+        auto res = *this;
+        ++beginIt;
+        return res;
+    }
 private:
     Iterator beginIt;
     Iterator endIt;
@@ -304,4 +318,67 @@ protected:
 inline uint64_t ror1_ip(uint64_t &x)
 {
    return (x >> 1) | (x << 63);
+}
+
+inline int tinyint_to_int(int v)
+{
+    if (v == 0)
+        return 0;
+    int sign = v < 0 ? (v=-v,-1) : 1;
+    return (1 << (v-1)) * sign;
+
+}
+
+inline int int_to_tinyint(int v)
+{
+    int sign = v < 0 ? (v=-v,-1) : 1;
+    //v >>= 1;
+    return ilog2_32(v+(v >> 1),0)*sign;
+}
+
+
+inline int int_to_tinyint(unsigned v)
+{
+    return ilog2_32(v+(v >> 1),0);
+}
+
+
+/*
+   0-4-4
+*/
+static int int_to_smallint(int v) {
+    if (v < 0x20) {
+        //printf("%8x) denorm as is: %d\n",v,v);
+        return v;
+    }
+    int sign = v < 0? (v=-v,-1) : 1;
+    int exp = 31-__builtin_clz(v);
+    if (exp-3 >= 15) {
+        int fraction = exp - 18;
+        assert(fraction<16);
+        //printf("%8x) overflow => %02x\n",v, 0xf0 + fraction);
+        return (0xf0 + fraction) * sign;
+    }
+    int fraction = v & (1 << exp)-1;
+    //uint32_t fraction_bits = fraction*16/(1<<exp);
+    assert(exp>=4);
+    int fraction_bits = fraction >> exp-4;
+    //printf("%8x) %d(%d) . %d (%d) => %02x\n",v, exp, (1 << exp),  fraction,fraction_bits, (exp-3)<<4 | fraction_bits);
+    assert( fraction_bits <= 15 );
+    return ((exp-3)<<4 | fraction_bits)*sign;
+
+}
+
+
+static  int smallint_to_int(int v) {
+    if (v < 0x20)
+        return v;
+    int sign = v < 0? (v=-v,-1) : 1;
+    int exp = (v >> 4);
+    if (exp == 15) {
+        return  (1 << 18 + (v & 0xf))*sign;
+    }
+    int base = 8 << exp;
+    int fraction = (v & 0xf)<<(exp-1);
+    return (base | fraction) * sign;
 }

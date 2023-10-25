@@ -3,7 +3,13 @@
     "cmake.saveBeforeBuild": true,
     "cmake.debugConfig": {
         "args": [
-            "D:\\Sources\\C++\\Projects\\dwt53\\build\\enwik9", "-s33"
+            "--mono",
+            "-d",
+            "D:\\Sources\\C++\\Projects\\dwt53\\build\\sine440-mono.raw.sfht",
+            "D:\\Sources\\C++\\Projects\\dwt53\\build\\debug.raw",
         ]
+    },
+    "cmake.configureSettings": {
+        "CMAKE_TOOLCHAIN_FILE": "D:/Sources/C++/Projects/clang/vcpkg/scripts/buildsystems/vcpkg.cmake"
     }
 }

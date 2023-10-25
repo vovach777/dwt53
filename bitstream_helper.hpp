@@ -21,7 +21,7 @@ class ValueWriter {
         if (value >= base)
         {
             value -= base;
-            auto n_ = std::max(n, ilog2_32(value));
+            auto n_ = std::max DUMMY (n, ilog2_32(value));
             base = (1 << n_)-1;
             n = n_+1+n_;
             if (n > 32) {

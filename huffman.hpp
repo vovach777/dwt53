@@ -70,6 +70,30 @@ namespace pack {
         }
 
        public:
+        std::string exportDHT()
+        {
+            ostringstream out;
+            out << "vector<vector<T>>{"  << endl;
+            for (auto & row : DHT)
+            {
+                out << "{";
+                    for (auto item : row)
+                    {
+                        out << int64_t(item) << ",";
+                    }
+                out << "}," << endl;
+            }
+            out << "};" << endl;
+            return out.str();
+
+        }
+        void setDHT( const vector<vector<T>> & dht )
+        {
+            DHT = dht;
+            create_lockup_table();  // need for encoder
+            buildHuffmanTree();     // need for decoder
+        }
+
         void encodeHuffmanTree(BitWriter& dest) {
             if (DHT.size() == 0) throw std::domain_error("No DHT found!");
             //std::cout << std::endl;
@@ -154,10 +178,16 @@ namespace pack {
                         void()) {
             // count frequency of appearance of each character
             // and store it in a map
-            unordered_map<T, int> freq;
+            unordered_map<T, size_t> freq;
             for (auto it = begin; it != end; ++it) {
                 freq[*it]++;
             }
+            buildHuffmanTree(freq);
+
+        }
+
+        void buildHuffmanTree(const unordered_map<T, size_t> & freq)
+        {
 
             pool.clear();
             pool.reserve(freq.size() * 2);

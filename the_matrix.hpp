@@ -39,12 +39,6 @@ decltype(auto) raster(MatrixType && img) {
     return std::forward<MatrixType>(img);
 }
 
-
-struct Range {
-    int min;
-    int max;
-};
-
 inline Block make_block(the_matrix const & matrix){
     //return Block{{0,matrix[0].size()}, {0,matrix.size()}};
     Block result;
@@ -55,15 +49,18 @@ inline Block make_block(the_matrix const & matrix){
     return result;
 }
 
+#ifndef DUMMY
+#define DUMMY
+#endif
 inline Range get_range(the_matrix const &matrix)
 {
-    int minVal = std::numeric_limits<int>::max();
-    int maxVal = std::numeric_limits<int>::min();
+    int minVal = std::numeric_limits<int>::max  DUMMY ();
+    int maxVal = std::numeric_limits<int>::min DUMMY ();
 
     for (const auto& row : matrix) {
         for (const auto val : row) {
-            minVal = std::min(minVal, val);
-            maxVal = std::max(maxVal, val);
+            minVal = std::min<>(minVal, val);
+            maxVal = std::max<>(maxVal, val);
         }
     }
     return Range{minVal,maxVal};
@@ -72,15 +69,15 @@ inline Range get_range(the_matrix const &matrix)
 
 inline Range get_range(the_matrix const &matrix, Block const& block)
 {
-    int minVal = std::numeric_limits<int>::max();
-    int maxVal = std::numeric_limits<int>::min();
+    int minVal = std::numeric_limits<int>::max DUMMY ();
+    int maxVal = std::numeric_limits<int>::min DUMMY ();
 
     for (int j=0; j < block.y.size; j++)
     for (int i=0; i < block.x.size; i++)
     {
         auto val = getValue(matrix, block.x.offs + i, block.y.offs + j);
-        minVal = std::min(minVal, val);
-        maxVal = std::max(maxVal, val);
+        minVal = std::min DUMMY (minVal, val);
+        maxVal = std::max DUMMY (maxVal, val);
     }
     return Range{minVal,maxVal};
 }
@@ -250,8 +247,8 @@ inline int getValue(const the_matrix& matrix, int row, int col) {
     int width = matrix[0].size();
 
     // Удерживаем координаты в границах матрицы
-    row = std::max(0, std::min(height - 1, row));
-    col = std::max(0, std::min(width - 1, col));
+    row = std::max DUMMY (0, std::min DUMMY (height - 1, row));
+    col = std::max DUMMY (0, std::min DUMMY (width - 1, col));
 
     return matrix[row][col];
 }
@@ -369,7 +366,7 @@ inline int make_positive(the_matrix & a)
     int min = 0;
     for (const auto & row: a)
     for (const auto v : row)
-       min = std::min(v, min);
+       min = std::min DUMMY (v, min);
     if (min < 0) {
     for (auto & row: a)
     for (auto & v : row)
@@ -419,8 +416,8 @@ inline int psnr(const the_matrix & originalImage, const the_matrix& compressedIm
     int count = originalImage.size() * originalImage[0].size();
     if (count == 0)
         return 0;
-    for (int y=0,max_y=std::min(originalImage.size(), compressedImage.size()); y<max_y; y++)
-    for (int x=0,max_x=std::min(originalImage[y].size(), compressedImage[y].size()); x<max_x; x++)
+    for (int y=0,max_y=std::min DUMMY (originalImage.size(), compressedImage.size()); y<max_y; y++)
+    for (int x=0,max_x=std::min DUMMY (originalImage[y].size(), compressedImage[y].size()); x<max_x; x++)
     {
         auto diff = originalImage[y][x]+originalRange.min - (compressedImage[y][x] + originalRange.min);
         mse += diff * diff;

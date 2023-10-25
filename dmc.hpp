@@ -47,7 +47,7 @@
 #include <cstdint>
 #include <vector>
 #include <cassert>
-#include "bitstream.hpp"
+#include "utils.hpp"
 
 namespace pack
 {
@@ -77,6 +77,8 @@ namespace pack
         {
             reset_model(0x10000);
         }
+
+        DMCModel(const DMCModelConfig &config) : DMCModel(config.maxnodes, config.threshold, config.bigthresh, config.reset_on_overflow) {}
 
         DMCModel(int maxnodes, int threshold = 2, int bigthresh = 2, bool reset_on_overflow = true)
         {
@@ -140,8 +142,8 @@ namespace pack
                         const auto new_c1 = new_->count[1] =  count_next_b[1] * r;
 
 
-                        state->next[b]->count[0] = ffmpeg::FFMAX( count_next_b[0] - new_c0, 1.0f);
-                        state->next[b]->count[1] = ffmpeg::FFMAX( count_next_b[1] - new_c1, 1.0f);
+                        state->next[b]->count[0] = std::max<float>( count_next_b[0] - new_c0, 1.0f);
+                        state->next[b]->count[1] = std::max<float>( count_next_b[1] - new_c1, 1.0f);
 
                         assert(state->next[b]->count[0] > 0);
                         assert(state->next[b]->count[0] > 0);
@@ -159,12 +161,12 @@ namespace pack
                         {
                             reset_model();
                         } else {
-                            extend_count++;
-                            if (extend_count == (maxnodes>>8)+256) {
-                                extend_count = 0;
-                                state =  &nodebuf[ rand_xor() % maxnodes ];
-                                //std::cout << std::endl;
-                            }
+                            // extend_count++;
+                            // if (extend_count == (maxnodes>>8)+256) {
+                            //     extend_count = 0;
+                            //     state =  &nodebuf[ rand_xor() % maxnodes ];
+                            //     //std::cout << std::endl;
+                            // }
                             // std::cout << std::endl << deep << std::endl;
                             // char in;
                             // std::cin >> in;
@@ -398,6 +400,10 @@ namespace pack
             return reader.begin();
         }
 
+        void reset_model() {
+            model.reset_model();
+        }
+
         private:
             inline uint8_t ReadByte() {
                 return reader.is_end() ? 0 : reader.read_u8();
@@ -411,5 +417,231 @@ namespace pack
         Reader<Iterator> reader;
         DMCModel model;
     };
+
+
+    class DMC_compressor_ref_model
+    {
+    public:
+        DMC_compressor_ref_model(DMCModel * model) : model(model), x1_(0), x2_(0xffffffff) {}
+
+        template <int bits>
+        void put_symbol_bits(uint64_t value)
+        {
+            auto mask = 1ULL << (bits - 1);
+            for (int i = 0; i < bits; i++)
+            {
+                put(value & mask);
+                mask >>= 1;
+            }
+        }
+
+        void put(int bit)
+        {
+            const uint32_t p = Discretize( model->predict() );
+            const uint32_t xmid = x1_ + ((x2_ - x1_) >> 16) * p +
+                                  (((x2_ - x1_) & 0xffff) * p >> 16);
+            if (bit)
+            {
+                x2_ = xmid;
+            }
+            else
+            {
+                x1_ = xmid + 1;
+            }
+            model->update_model(bit);
+
+            while (((x1_ ^ x2_) & 0xff000000) == 0)
+            {
+                WriteByte(x2_ >> 24);
+                x1_ <<= 8;
+                x2_ = (x2_ << 8) + 255;
+            }
+        }
+
+       void put_symbol(int v, int is_signed)
+        {
+            int i;
+
+            if (v)
+            {
+                const int a = ffmpeg::FFABS(v);
+                const int e = ffmpeg::av_log2(a);
+                put(0);
+                if (e <= 9)
+                {
+                    for (i = 0; i < e; i++)
+                        put(1); // 1..10
+                    put(0);
+
+                    for (i = e - 1; i >= 0; i--)
+                        put((a >> i) & 1); // 22..31
+
+                    if (is_signed)
+                        put(v < 0); // 11..21
+                }
+                else
+                {
+                    for (i = 0; i < e; i++)
+                        put(1); // 1..10
+                    put(0);
+
+                    for (i = e - 1; i >= 0; i--)
+                        put((a >> i) & 1); // 22..31
+
+                    if (is_signed)
+                        put(v < 0); // 11..21
+                }
+            }
+            else
+            {
+                put(1);
+            }
+        }
+        inline size_t get_bytes_count()
+        {
+            return bytestream.size();
+        }
+        inline std::vector<uint8_t> get_bytes()
+        {
+            std::vector<uint8_t> res;
+            res.swap(bytestream);
+            bytestream.reserve(res.capacity());
+            return res;
+        }
+
+        std::vector<uint8_t> finish()
+        {
+            while (((x1_ ^ x2_) & 0xff000000) == 0)
+            {
+                WriteByte(x2_ >> 24);
+                x1_ <<= 8;
+                x2_ = (x2_ << 8) + 255;
+            }
+            WriteByte(x2_ >> 24);
+            std::vector<uint8_t> res;
+            res.swap(bytestream);
+            return res;
+        }
+
+        size_t get_nodes_count() const
+        {
+            return model->get_nodes_count();
+        }
+
+        inline void set_model(DMCModel *model) {
+            this->model = model;
+        }
+
+    private:
+        inline void WriteByte(uint8_t byte)
+        {
+            bytestream.push_back(byte);
+        }
+
+        inline uint32_t Discretize(float p)
+        {
+            return 1 + 65534 * p;
+        }
+        uint32_t x1_, x2_;
+        DMCModel *model = nullptr;
+        std::vector<uint8_t> bytestream;
+    };
+
+    template <typename Iterator>
+    class DMC_decompressor_ref_model {
+        public:
+        DMC_decompressor_ref_model(Iterator begin, Iterator end, DMCModel *model) : reader(begin, end), model(model), x1_(0), x2_(0xffffffff), x_(0)
+        {
+            for (int i = 0; i < 4; ++i) {
+                x_ = (x_ << 8) + ( reader.is_end() ? 0 : reader.read_u8());
+            }
+        }
+        DMC_decompressor_ref_model(const Reader<Iterator> & reader, DMCModel &model) : reader(reader), model(model), x1_(0), x2_(0xffffffff), x_(0)
+        {
+            for (int i = 0; i < 4; ++i) {
+                x_ = (x_ << 8) + ( this->reader.is_end() ? 0 : this->reader.read_u8());
+            }
+        }
+
+        bool get() {
+            const uint32_t p = Discretize(model->predict());
+            const uint32_t xmid = x1_ + ((x2_ - x1_) >> 16) * p +
+                (((x2_ - x1_) & 0xffff) * p >> 16);
+            int bit = 0;
+            if (x_ <= xmid) {
+                bit = 1;
+                x2_ = xmid;
+            } else {
+                x1_ = xmid + 1;
+            }
+
+            model->update_model(bit);
+
+            while (((x1_^x2_) & 0xff000000) == 0) {
+                x1_ <<= 8;
+                x2_ = (x2_ << 8) + 255;
+                x_ = (x_ << 8) + ReadByte();
+            }
+            return bit;
+        }
+
+        template <uint32_t bits>
+        uint32_t get_symbol_bits()
+        {
+            int res = 0;
+            for (int i = 0; i < bits; i++)
+            {
+                res = res + res + get();
+            }
+            return res;
+        }
+
+        int get_symbol(int is_signed)
+        {
+            if (get())
+                return 0;
+            else
+            {
+                int i, e;
+                unsigned a;
+                e = 0;
+                while (get())
+                { // 1..10
+                    e++;
+                    if (e > 31)
+                        throw std::runtime_error("AVERROR_INVALIDDATA");
+                }
+
+                a = 1;
+                for (i = e - 1; i >= 0; i--)
+                    a += a + get(); // 22..31
+
+                e = -(is_signed && get()); // 11..21
+                return (a ^ e) - e;
+            }
+        }
+
+        inline auto position() {
+            return reader.begin();
+        }
+
+        inline void set_model(DMCModel *model) {
+            this->model = model;
+        }
+
+        private:
+            inline uint8_t ReadByte() {
+                return reader.is_end() ? 0 : reader.read_u8();
+            }
+
+            inline uint32_t Discretize(float p) {
+                return 1 + 65534 * p;
+            }
+
+        uint32_t x1_, x2_, x_;
+        Reader<Iterator> reader;
+        DMCModel *model;
+    };
+
 
 } // namespace pack

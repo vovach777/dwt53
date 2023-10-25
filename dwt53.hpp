@@ -1,4 +1,10 @@
 #pragma once
+
+#ifdef __cplusplus
+#define __inline inline
+#else
+#define __inline static
+#endif
 /*
   * variants *
         ** L - variants **
@@ -33,15 +39,11 @@
         E: H = H + L0
 */
 
-#ifdef __cplusplus
-#include "the_matrix.hpp"
-#endif
+__inline int sizeof_L(int x) { return (x + 1) >> 1; }
 
-static int sizeof_L(int x) { return (x + 1) >> 1; }
+__inline int sizeof_H(int x) { return x >> 1; }
 
-static int sizeof_H(int x) { return x >> 1; }
-
-static void dwt53(const int *x, int size, int *L, int *H) {
+__inline void dwt53(const int *x, int size, int *L, int *H) {
     if (size & 1) {
         // C-variant
         int *H_p = H;
@@ -95,7 +97,7 @@ static void dwt53(const int *x, int size, int *L, int *H) {
     }
 }
 
-static void idwt53(int *x, int size, const int *L, const int *H) {
+__inline void idwt53(int *x, int size, const int *L, const int *H) {
     if (size & 1) {
         const int *L_p = L;
         // A-variant
@@ -156,7 +158,7 @@ static void idwt53(int *x, int size, const int *L, const int *H) {
     }
 }
 
-static void haar(const int *x, int size, int *L, int *H) {
+__inline void haar(const int *x, int size, int *L, int *H) {
     int *H_p = H;
     int *L_p = L;
     const int *x_p = x;
@@ -175,7 +177,7 @@ static void haar(const int *x, int size, int *L, int *H) {
     }
 }
 
-static void ihaar(int *x, int size, const int *L, const int *H) {
+__inline void ihaar(int *x, int size, const int *L, const int *H) {
     const int *H_p = H;
     const int *L_p = L;
     int *x_p = x;
@@ -193,9 +195,13 @@ static void ihaar(int *x, int size, const int *L, const int *H) {
     }
 }
 
+#ifndef no_dwt2d
+#ifdef __cplusplus
+#include "the_matrix.hpp"
+#endif
+
 #ifdef THE_MATRIX_DEFINED
 #include "quantization.hpp"
-#include <numeric>
 
 namespace dwt2d {
 
@@ -242,7 +248,7 @@ struct Band {
     }
 };
 
-static std::vector<dwt2d::Band> calc_geometry(int width, int height,
+inline std::vector<dwt2d::Band> calc_geometry(int width, int height,
                                               int levels) {
     std::vector<Band> result;
     int num = 1;
@@ -253,7 +259,7 @@ static std::vector<dwt2d::Band> calc_geometry(int width, int height,
 }
 
 template <typename F>
-static void process_levels(the_matrix &a, int levels, F f) {
+inline void process_levels(the_matrix &a, int levels, F f) {
     int width = a[0].size();
     int height = a.size();
 
@@ -304,10 +310,20 @@ class Transform {
                            the_matrix const &data) {
         data_ = data;
         set_transform(transform);
-        LH_storage_.resize(std::max(data[0].size(), data.size()));
+        LH_storage_.resize(std::max DUMMY (data[0].size(), data.size()));
         geometry_ = calc_geometry(data[0].size(), data.size(), levels);
         levels_ = geometry_.size();
     }
+
+    the_matrix& prepare_transform(int levels, Wavelet transform, size_t width, size_t height) {
+        set_transform(transform);
+        LH_storage_.resize(std::max DUMMY (width, height));
+        geometry_ = calc_geometry(width, height, levels);
+        levels_ = geometry_.size();
+        data_ = the_matrix(height,std::vector<int>(width));
+        return data_;
+    }
+
 
     the_matrix &forward() {
         for (auto &row : data_) {
@@ -358,23 +374,30 @@ class Transform {
 
     void quantization(int Q = 4, int details=4) {
 
-        std::vector<int> flat_data;
-        flat_data.reserve(data_.size() * data_[0].size());
+
+        //TODO: менять фактор Q в зависимости от уровня.
+
+        scalar_adaptive_quantization lockup_table;
+        assert( lockup_table.is_enabled() == false);
+
         int max_value = 0;
 
-
+        //Quant only high components
+        for (int pass = 1; pass <= 2; ++pass)
         for (int level = 0; level < levels_; ++level) {
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 3; i++) //except HH
                 process_matrix(data_, geometry_[level].blocks[i],
                                [&](int v) {
-                                   max_value = std::max(max_value,abs(v));
-                                   flat_data.push_back(v);
+                                    if (pass == 1)
+                                        max_value = std::max DUMMY ( max_value, std::abs(v));
+                                    else {
+                                        if ( ! lockup_table.is_enabled() )
+                                            lockup_table.init(Q,max_value, details);
+                                        else
+                                            lockup_table.update_histogram(std::abs(v));
+                                    }
                                });
-        };
-
-        std::vector<int> details_vec(details*2+1);
-        std::iota(details_vec.begin(), details_vec.end(), -details );
-        auto lockup_table = scalar_adaptive_quantization(flat_data.begin(), flat_data.end(), Q, max_value, details_vec );
+        }
 
 
         for (int level = 0; level < levels_; ++level) {
@@ -390,4 +413,5 @@ class Transform {
 
 }  // namespace dwt2d
 
+#endif
 #endif

@@ -8,6 +8,19 @@
   #if __has_builtin(__builtin_clz)
     #define HAS_BUILTIN_CLZ
   #endif
+#else
+     #if defined(_MSC_VER)
+        inline int __builtin_clz(unsigned long mask)
+        {
+            unsigned long where;
+            // Search from LSB to MSB for first set bit.
+            // Returns zero if no set bit is found.
+            if (_BitScanReverse(&where, mask))
+                return static_cast<int>(31 - where);
+            return 32; // Undefined Behavior.
+        }
+        #define HAS_BUILTIN_CLZ
+     #endif
 #endif
 
 struct Range {

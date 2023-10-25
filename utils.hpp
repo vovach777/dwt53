@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <iostream>
 #include <type_traits>
+#include <cassert>
 
 #if defined(__has_builtin)
   #if __has_builtin(__builtin_clz)

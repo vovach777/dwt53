@@ -96,8 +96,6 @@ add_executable(rle8_compressor_img
 
 add_executable(snd_comp
     snd_comp.cpp
-    resampler.cpp
-    resampler.hpp
     myargs/myargs.hpp
     the_matrix.hpp
     dwt53.hpp
@@ -107,9 +105,9 @@ add_executable(snd_comp
 #target_compile_definitions(snd_comp PRIVATE )
 #target_compile_options(snd_comp PRIVATE -mfma -ffast-math)
 target_compile_options(snd_comp PRIVATE -ffast-math -msse2)
-find_library(ALGLIB_LIBRARY alglib.lib  PATHS  "${CMAKE_CURRENT_SOURCE_DIR}/alglib-cpp/src/build" )
-target_link_libraries(snd_comp ${ALGLIB_LIBRARY})
-target_include_directories(snd_comp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/alglib-cpp/src")
+#find_library(ALGLIB_LIBRARY alglib.lib  PATHS  "${CMAKE_CURRENT_SOURCE_DIR}/alglib-cpp/src/build" )
+#target_link_libraries(snd_comp ${ALGLIB_LIBRARY})
+#target_include_directories(snd_comp PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/alglib-cpp/src")
 
 
 

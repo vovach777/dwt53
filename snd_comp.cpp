@@ -11,7 +11,6 @@
 #include <unistd.h>
 #define _chsize_s(d, s) ftruncate(d,s)
 #endif
-#include "resampler.hpp"
 #include "myargs/myargs.hpp"
 #include "the_matrix.hpp"
 #include "dmc.hpp"

@@ -3,10 +3,11 @@
 #include <iostream>
 #include <type_traits>
 
-#if defined(__has_builtin) && __has_builtin(__builtin_clz)
+#if defined(__has_builtin)
+  #if __has_builtin(__builtin_clz)
     #define HAS_BUILTIN_CLZ
+  #endif
 #endif
-
 
 struct Range {
     int min;
@@ -16,6 +17,22 @@ struct Range {
 #ifndef DUMMY
     #define DUMMY
 #endif
+
+inline int ilog2_32(uint32_t v, int infinity_val = 1)
+{
+    if (v == 0)
+        return infinity_val;
+#ifdef HAS_BUILTIN_CLZ
+    return 32 - __builtin_clz(v);
+#else
+    int count = 0;
+    while (v) {
+        count++;
+        v >>= 1;
+    }
+    return count;
+#endif
+}
 
 namespace ffmpeg {
 
@@ -46,9 +63,24 @@ inline auto FFMAX(T1 a, T2 b) {
  * by per-arch headers.
 
  */
+
+#ifndef _MSVC_LANG
 union unaligned_64 { uint64_t l; } __attribute__((packed)) __attribute__((may_alias));
 union unaligned_32 { uint32_t l; } __attribute__((packed)) __attribute__((may_alias));
 union unaligned_16 { uint16_t l; } __attribute__((packed)) __attribute__((may_alias));
+#else
+#pragma pack(push, 1)
+union unaligned_64 { uint64_t l; };
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+union unaligned_32 { uint32_t l; };
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+union unaligned_16 { uint16_t l; };
+#pragma pack(pop)
+#endif
 
 /**
  * Clear high bits from an unsigned integer starting with specific bit position
@@ -56,51 +88,51 @@ union unaligned_16 { uint16_t l; } __attribute__((packed)) __attribute__((may_al
  * @param  p bit position to clip at
  * @return clipped value
  */
-inline __attribute__((const)) unsigned av_mod_uintp2_c(unsigned a, unsigned p)
+inline unsigned av_mod_uintp2_c(unsigned a, unsigned p)
 {
     return a & ((1U << p) - 1);
 }
 
 
-inline __attribute__((const)) int sign_extend(int val, unsigned bits)
+inline int sign_extend(int val, unsigned bits)
 {
     unsigned shift = 8 * sizeof(int) - bits;
     union { unsigned u; int s; } v = { (unsigned) val << shift };
     return v.s >> shift;
 }
-inline __attribute__((const)) int64_t sign_extend64(int64_t val, unsigned bits)
+inline int64_t sign_extend64(int64_t val, unsigned bits)
 {
     unsigned shift = 8 * sizeof(int64_t) - bits;
     union { uint64_t u; int64_t s; } v = { (uint64_t) val << shift };
     return v.s >> shift;
 }
-inline __attribute__((const)) unsigned zero_extend(unsigned val, unsigned bits)
+inline  unsigned zero_extend(unsigned val, unsigned bits)
 {
     return (val << ((8 * sizeof(int)) - bits)) >> ((8 * sizeof(int)) - bits);
 }
 
 
 
-inline __attribute__((always_inline)) __attribute__((const)) uint16_t av_bswap16(uint16_t x)
+constexpr uint16_t av_bswap16(uint16_t x)
 {
     x= (x>>8) | (x<<8);
     return x;
 }
 
-inline __attribute__((always_inline)) __attribute__((const)) uint32_t av_bswap32(uint32_t x)
+constexpr uint32_t av_bswap32(uint32_t x)
 {
     return ((((x) << 8 & 0xff00) | ((x) >> 8 & 0x00ff)) << 16 | ((((x) >> 16) << 8 & 0xff00) | (((x) >> 16) >> 8 & 0x00ff)));
 }
 
-inline uint64_t __attribute__((const)) av_bswap64(uint64_t x)
+constexpr uint64_t av_bswap64(uint64_t x)
 {
     return (uint64_t)av_bswap32(x) << 32 | av_bswap32(x >> 32);
 }
 
- inline int av_log2(uint32_t x) {
-    return (31 - __builtin_clz((x)|1));
-}
 
+ inline int av_log2(uint32_t x) {
+    return ilog2_32(x,1)-1;
+}
 }
 
 template <typename T>
@@ -153,24 +185,6 @@ Iterator find_nerest(Iterator begin, Iterator end, typename std::iterator_traits
     return lower_distance < upper_distance ? std::prev(it) : it;
 }
 
-
-inline int ilog2_32(uint32_t v, int infinity_val = 1)
-{
-    if (v == 0)
-        return infinity_val;
-#ifdef HAS_BUILTIN_CLZ
-    return 32 - __builtin_clz(v);
-#else
-    int count = 0;
-    while (v) {
-        count++;
-        v >>= 1;
-    }
-    return count;
-#endif
-}
-
-
 inline int make_jpair(int bitlen, int value) {
     return bitlen | value << 4;
 }
@@ -180,7 +194,7 @@ inline int to_jpair(int v)
         return 0;
     v = std::clamp(v, -32767, 32767);
     int uv = abs(v);
-    int bitlen = 32 - __builtin_clz(uv);
+    int bitlen = ilog2_32(uv,0);
     const int base = 1 << (bitlen-1);
     return make_jpair(bitlen, v < 0 ?  uv - base | base : uv - base);
 }
@@ -346,13 +360,13 @@ inline int int_to_tinyint(unsigned v)
 /*
    0-4-4
 */
-static int int_to_smallint(int v) {
+inline int int_to_smallint(int v) {
     if (v < 0x20) {
         //printf("%8x) denorm as is: %d\n",v,v);
         return v;
     }
     int sign = v < 0? (v=-v,-1) : 1;
-    int exp = 31-__builtin_clz(v);
+    int exp = ilog2_32(v,1)-1;
     if (exp-3 >= 15) {
         int fraction = exp - 18;
         assert(fraction<16);
@@ -370,7 +384,7 @@ static int int_to_smallint(int v) {
 }
 
 
-static  int smallint_to_int(int v) {
+inline int smallint_to_int(int v) {
     if (v < 0x20)
         return v;
     int sign = v < 0? (v=-v,-1) : 1;

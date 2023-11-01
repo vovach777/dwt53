@@ -17,12 +17,13 @@
 //#include "quantization.hpp"
 #include "timed.hpp"
 #include "dmc.hpp"
-#include "dwt53.hpp"
+#include "dwt97.hpp"
 
 using myargs::Args;
-using pack::DMC_compressor;
-using pack::DMC_decompressor;
+using pack::DMC_compressor_ref_model;
+using pack::DMC_decompressor_ref_model;
 using pack::DMCModelConfig;
+using pack::DMCModel;
 Args args;
 
 
@@ -119,8 +120,8 @@ void idht(T * begin, int n)
 }
 
 
-void encode_block(DMC_compressor &enc, const float * csine, int block_size, int q=32 )
-{
+/*
+
     // // Находим абсолютный максимальный элемент
     // auto volume = std::abs(*std::max_element(csine, csine+block_size, [](auto a, auto b) {
     //     return std::abs(a) < std::abs(b);
@@ -164,47 +165,105 @@ void encode_block(DMC_compressor &enc, const float * csine, int block_size, int 
     //std::cout << "packed spactr: " << std::endl;
     //std::cout << sine_packed << std::endl;
 
+*/
 
-    std::vector<int> work_area( block_size );
-    for (int i=0; i< block_size; ++i)
-        work_area[i] = csine[i]*32767.0;
+void encode_block(DMC_compressor_ref_model &enc, DMCModel* base_model, DMCModel* scale_model,  const float * csine, int block_size, int q=32 )
+{
 
 
-    std::vector<int> block_int( block_size );
+    std::vector<float> work_area( block_size );
+    std::vector<float> block_int( csine, csine + block_size );
+
+
+    if (q == 0)
+        q = 16;
+    if (q > 256)
+        q = 256;
+
 
     for (int size = block_size; size>=2;  size/=2) {
 
-        dwt53(block_int.data(), size, work_area.data(), work_area.data() + size/2);
-        std::copy(work_area.begin(), work_area.begin() + size, block_int.begin());
+        dwt97(block_int.data(), work_area.data(), size);
+
+        // int avg = 0;
+        // for (int i=size/2; i < size; ++i)
+        // {
+        //     avg += std::abs(block_int[i]);
+        // }
+        // avg /= size / 2 ;
+
+
+        // if (args.has("trace")) std::cerr << size/2 << " [" << avg  << "] :" ;
+
+
+
+        for (int i=size/2; i < size; ++i)
+        {
+
+            enc.put_symbol( block_int[i] * q, 1);
+
+        }
 
     }
+    enc.put_symbol(block_int[0] * q,1);
 
 
-    for (int size=2; size <= block_int.size(); size *= 2)
-    {
-    for (int i = 0, max_element = std::abs(*std::max_element( block_int.begin() + size/2, block_int.begin() + size, [](int a, int b) { return std::abs(a) < std::abs(b); } )); i< size /2; i++)
-    {
-        if (i == 0)
-            enc.put_symbol(max_element,0);
-
-        enc.put_symbol( round(block_int[i+size/2] / float(max_element) *  q) , 1);
-    }
-    }
+    // for (int size=2; size <= block_int.size(); size *= 2)
+    // {
+    //     auto max_element = std::abs(*std::max_element( block_int.begin() + size/2, block_int.begin() + size, [](int a, int b) { return std::abs(a) < std::abs(b); } ));
+    //     enc.set_model(base_model);
+    //     enc.put_symbol( max_element, 0);
+    //     enc.set_model(scale_model);
+    //     if ( max_element > 0) {
+    //         for (int i = 0; i < size /2; i++)
+    //         {
+    //             enc.put_symbol(  round(block_int[i+size/2]  * q / float(max_element))   , 1);
+    //         }
+    //     }
+    // }
 }
 
 template <typename DMC_decompressor>
-void decode_block(DMC_decompressor & dec, float * output, int block_size, int q=32 )
+void decode_block(DMC_decompressor & dec,  DMCModel* base_model, DMCModel* scale_model,  float * output, int block_size, int q=32 )
 {
 
-    for (int i = 0; i<block_size; ++i)
-    {
-        output[i] = dec.get_symbol(1) / float(q) * block_size;
+
+    std::vector<float> work_area(block_size,0);
+    // for (int size=2; size <= block_size; size *= 2)
+    // {
+    //     dec.set_model(base_model);
+    //     int max_element = dec.get_symbol(0);
+
+
+    //     if (max_element > 0) {
+    //         dec.set_model(scale_model);
+    //         //max_element = (1 << (max_element-1));
+    //         auto max_element_float =  float(max_element) / float(q);
+    //         for (int i = 0; i< size /2; i++)
+    //         {
+    //             block_int[i+size/2] = round(dec.get_symbol(1) * max_element_float);
+    //         }
+    //     }
+    // }
+
+    for (int size = block_size; size>=2;  size/=2) {
+        for (int i = size/2; i < size; ++i)
+        {
+            output[i] = dec.get_symbol(1) / float(q);
+            //std::cerr << block_int[i] << " ";
+        }
+        //std::cerr << std::endl;
     }
-    //inverse transform
-    idht(output, block_size);
+    output[0] =  dec.get_symbol(1) / float(q);
+     //std::cerr << block_int[0] << std::endl << std::endl;
+
+    for (int size = 2; size <= block_size; size*=2) {
+        idwt97(output, work_area.data(), size );
+    }
+
 }
 
-constexpr int SIGNATURE = 0x11223302;
+constexpr int SIGNATURE = 0x11223304;
 
 void createEmptyFile(const std::string& fileName, std::streamsize fileSize) {
     FILE *fp=fopen(fileName.data(), "w");
@@ -232,49 +291,11 @@ float linear(float x, float width, float x0, float x1)
 }
 
 
-void glue_block(float * block, int block_size)
-{
 
-//   std::fill( block, block+block_size, 0.0f);
-//   block[0] = -1;
-
-    float phase_2 = 0;
-    for (int i = 0; i < 4; i++) {
-        phase_2 += block[-i];
-    }
-
-    float phase_1 = 0;
-    for (int i = 0; i < 4; i++) {
-        phase_1 += block[-i-8];
-    }
-
-    float phase_3 = 0;
-    for (int i = 0; i < 4; i++) {
-        phase_3 += block[i];
-    }
-
-    float phase_4 = 0;
-    for (int i = 0; i < 4; i++) {
-        phase_4 += block[i+8];
-    }
+void glue_blocks(float* glue_point, int spred_error) {
 
 
-    if ( ( phase_1 <= phase_2 && phase_3 <= phase_4 ) ||
-         (phase_1 >= phase_2 && phase_3 >= phase_4 ) )
-        {
-            // do nothing
-    } else {
-        //inverse_phase
-        // for (int i=0; i < block_size; i++)
-        //    block[i] *= -1;
-    }
 
-    float diff = block[-1] - block[0];
-
-    for (int i = 0; i< block_size; i++)
-    {
-       block[i] = std::clamp<float>(  block[i] +  linear(i+1, block_size,  diff, 0), -1.0f, 1.0f);
-    }
 
 }
 
@@ -291,7 +312,7 @@ int main(int argc, char** argv)
     config.reset_on_overflow = false;
     config.maxnodes = 1ULL << 23;
 
-    int block_size = 1 << ( ilog2_32( args.get("block-size",256,64,8192),1) -1 ) ;
+    int block_size = 1 << ( ilog2_32( args.get("block-size",256,64,32768),1) -1 ) ;
 
     std::error_code error;
     mio::ummap_source mmap = mio::make_mmap<mio::ummap_source>(args[1], 0, 0, error);
@@ -302,7 +323,10 @@ int main(int argc, char** argv)
     }
 
     if ( args.has('d') ) {
-        auto dec = DMC_decompressor( mmap.cbegin(), mmap.cend(), config );
+        DMCModel base_model(config);
+        DMCModel scale_model(config);
+
+        auto dec = DMC_decompressor_ref_model( mmap.cbegin(), mmap.cend(), &base_model );
         if ( dec.get_symbol(0) != SIGNATURE ) {
             std::cerr << "input is not compressed by fht-1" << std::endl;
             return 2;
@@ -328,9 +352,33 @@ int main(int argc, char** argv)
 
         for( int n = 0; n < blocks_nb; ++n )
         {
-            decode_block(dec, sf32, block_size,q);
-            if (n > 0 ) {
-                glue_block(sf32, block_size);
+            decode_block(dec, &base_model, &scale_model, sf32, block_size,q);
+            if (n > 0) {
+                auto recovery_prev_last = sf32[0] -  dec.get_symbol(1) / 32768.0f;
+#if 1
+                if (args.has("trace")) std::cerr <<  "glue samples: " << static_cast<int>(sf32[-1] * 32768.0f) << " + " << static_cast<int>(recovery_prev_last * 32768.0f) << " + " << static_cast<int>(sf32[0] * 32768.0f) << std::endl;
+
+                auto diff = recovery_prev_last - sf32[-1];
+
+                for (int i=-1; i>-block_size; --i)
+                {
+                    int prev = static_cast<int>( sf32[i] * 32768.0f);
+                    sf32[i] += linear(-1-i,block_size,diff, 0);
+                    //diff = 1.0f - 1.0f/( block_size/2 );
+                    if (std::abs(sf32[i]*32768.0f - prev) < 2 )
+                        break;
+                    if (args.has("trace")) std::cerr <<  static_cast<int>( sf32[i] * 32768.0f ) << "/" << prev << " ";
+
+                }
+                if (args.has("trace")) std::cerr << std::endl;
+#endif
+            }
+            //clip
+            for (int i = 0; i < block_size; i++)
+            {
+
+                sf32[i] = std::clamp<float>( sf32[i], -1.0f, 1.0f);
+
             }
             sf32 += block_size;
         }
@@ -341,11 +389,12 @@ int main(int argc, char** argv)
     auto block_nb = mmap.size() / (block_size * 4 );
 
 
+    DMCModel base_model(config);
+    DMCModel scale_model(config);
 
-    DMC_compressor enc(config);
+    DMC_compressor_ref_model enc(&base_model);
     int prev_sample = 0;
-    bool put_symbol_opt = args.has("symbol");
-    int  q_opt = args.get('q',32,1,block_size*2);
+    int  q_opt = args.get('q',7,0,32768);
     enc.put_symbol(SIGNATURE,0); //signature
     enc.put_symbol( ilog2_32( block_size,1 )-1, 0 );
     enc.put_symbol( q_opt, 0);
@@ -353,10 +402,21 @@ int main(int argc, char** argv)
     std::cout << "q = " << q_opt << std::endl;
     enc.put_symbol(block_nb,0); //blocks count
 
-    while (block_nb--)
+    for (size_t n = 0; n < block_nb; ++n)
     {
-        encode_block(enc,sf32,block_size, q_opt);
-        sf32 += block_size;
+        encode_block(enc,&base_model, &scale_model, sf32,block_size, q_opt);
+        if ( n > 0 )
+        {
+            //glue value
+            auto glue_value = static_cast<int>( (sf32[0]-sf32[-1]) * 32768.0f);
+            enc.put_symbol( glue_value  , 1);
+            if (args.has("trace"))
+            {
+                std::cerr <<  "glue-value: " <<  glue_value << std::endl;
+            }
+        }
+       sf32 += block_size;
+
     }
 
     std::string output_filename =  ( args.size() > 2 ) ? args[2] :  args[1] + ".sfht";

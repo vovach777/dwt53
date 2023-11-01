@@ -2,8 +2,12 @@
 
 #ifdef __cplusplus
 #define __inline inline
+#ifndef NULL
+    #define NULL nullptr
+#endif
 #else
 #define __inline static
+#include "stddef.h"
 #endif
 /*
   * variants *
@@ -158,6 +162,34 @@ __inline void idwt53(int *x, int size, const int *L, const int *H) {
     }
 }
 
+__inline void dwt53_ip(int *x, int *work_area, int size) {
+    if ( work_area == NULL) {
+        work_area = (int*) calloc(size,sizeof(int));
+        if ( work_area == NULL)
+            return; //TODO:: need fix
+        dwt53_ip(x,work_area, size);
+        free(work_area);
+    } else{
+        dwt53(x, size, work_area, work_area+sizeof_L(size));
+        memcpy(x, work_area, size * sizeof(int));
+    }
+}
+
+__inline void idwt53_ip(int *x, int *work_area, int size) {
+    if (work_area == NULL) {
+        work_area = (int*) calloc(size,sizeof(int));
+        if ( work_area == NULL)
+            return; //TODO:: need fix
+        idwt53_ip(x,work_area, size);
+        free(work_area);
+    }
+    else {
+        idwt53(work_area, size, x, x + sizeof_L(size));
+        memcpy(x, work_area, size * sizeof(int));
+    }
+}
+
+
 __inline void haar(const int *x, int size, int *L, int *H) {
     int *H_p = H;
     int *L_p = L;
@@ -193,6 +225,30 @@ __inline void ihaar(int *x, int size, const int *L, const int *H) {
     if (size & 1) {
         *x_p = *L_p;
     }
+}
+
+//level = 0  -  error
+//level = 1  -  [         |      *      ]
+//level = 2  -  [    | *  |             ]
+//level = 2  -  [ |* |    |             ]
+
+__inline int seek_to_band( int *x, int full_size, int level, int ** bandout, int *sizeout)
+{
+    if (level <= 0) {
+        return -2; //invalid arg
+    }
+    int size = full_size;
+    for (int i = 1; i < level; i++)
+    {
+        size = sizeof_L(size);
+        if (size == 1)
+            return -1;
+    }
+    if (size == 1)
+        return -1; //no band
+    *bandout = x + sizeof_L(size);
+    *sizeout = sizeof_H(size);
+    return 0;
 }
 
 #ifndef no_dwt2d
@@ -247,6 +303,7 @@ struct Band {
         height = L_height;
     }
 };
+
 
 inline std::vector<dwt2d::Band> calc_geometry(int width, int height,
                                               int levels) {

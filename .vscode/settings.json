@@ -3,8 +3,10 @@
     "cmake.saveBeforeBuild": true,
     "cmake.debugConfig": {
         "args": [
-            "D:\\Sources\\C++\\Projects\\dwt53\\build\\480px-Lenna-24.bmp",
-            "D:\\Sources\\C++\\Projects\\dwt53\\build\\debug.dmc",
+            "--block-size=4096",
+            "-q32768",
+            "D:\\Sources\\C++\\Projects\\dwt53\\build\\Sample_BeeMoved_96kHz24bit-mono.raw",
+            "D:\\Sources\\C++\\Projects\\dwt53\\build\\debug.sfht",
         ]
     },
     "cmake.configureSettings": {

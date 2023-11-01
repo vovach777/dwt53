@@ -292,10 +292,23 @@ float linear(float x, float width, float x0, float x1)
 
 
 
-void glue_blocks(float* glue_point, int spred_error) {
+void glue_blocks(float* sf32, int block_size) {
 
 
+    auto predict_diff = ((sf32[-1] - sf32[-2]) + (sf32[1] - sf32[0])) / 2.0f;
 
+    auto predict_sample = sf32[-1] +  predict_diff;
+
+    auto diff = sf32[0] - predict_sample;
+
+    for (int i=0; i<block_size; ++i)
+    {
+
+        auto step = linear(i,block_size, diff, 0);
+        if (std::abs(step)  < 0.00005f)
+            return;
+        sf32[i] -= step;
+    }
 
 }
 
@@ -354,24 +367,7 @@ int main(int argc, char** argv)
         {
             decode_block(dec, &base_model, &scale_model, sf32, block_size,q);
             if (n > 0) {
-                auto recovery_prev_last = sf32[0] -  dec.get_symbol(1) / 32768.0f;
-#if 1
-                if (args.has("trace")) std::cerr <<  "glue samples: " << static_cast<int>(sf32[-1] * 32768.0f) << " + " << static_cast<int>(recovery_prev_last * 32768.0f) << " + " << static_cast<int>(sf32[0] * 32768.0f) << std::endl;
-
-                auto diff = recovery_prev_last - sf32[-1];
-
-                for (int i=-1; i>-block_size; --i)
-                {
-                    int prev = static_cast<int>( sf32[i] * 32768.0f);
-                    sf32[i] += linear(-1-i,block_size,diff, 0);
-                    //diff = 1.0f - 1.0f/( block_size/2 );
-                    if (std::abs(sf32[i]*32768.0f - prev) < 2 )
-                        break;
-                    if (args.has("trace")) std::cerr <<  static_cast<int>( sf32[i] * 32768.0f ) << "/" << prev << " ";
-
-                }
-                if (args.has("trace")) std::cerr << std::endl;
-#endif
+                glue_blocks(sf32, block_size);
             }
             //clip
             for (int i = 0; i < block_size; i++)
@@ -405,16 +401,6 @@ int main(int argc, char** argv)
     for (size_t n = 0; n < block_nb; ++n)
     {
         encode_block(enc,&base_model, &scale_model, sf32,block_size, q_opt);
-        if ( n > 0 )
-        {
-            //glue value
-            auto glue_value = static_cast<int>( (sf32[0]-sf32[-1]) * 32768.0f);
-            enc.put_symbol( glue_value  , 1);
-            if (args.has("trace"))
-            {
-                std::cerr <<  "glue-value: " <<  glue_value << std::endl;
-            }
-        }
        sf32 += block_size;
 
     }

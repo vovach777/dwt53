@@ -263,7 +263,7 @@ void decode_block(DMC_decompressor & dec,  DMCModel* base_model, DMCModel* scale
 
 }
 
-constexpr int SIGNATURE = 0x11223304;
+constexpr int SIGNATURE = 0x11223305;
 
 void createEmptyFile(const std::string& fileName, std::streamsize fileSize) {
     FILE *fp=fopen(fileName.data(), "w");
@@ -290,25 +290,34 @@ float linear(float x, float width, float x0, float x1)
     return (x1-x0) / width * x + x0;
 }
 
-
+template <typename T>
+bool intersection( T a_min, T a_max, T b_min, T b_max )
+{
+    return std::max DUMMY (a_min, b_min) < std::min DUMMY (a_max, b_max);
+}
 
 void glue_blocks(float* sf32, int block_size) {
 
 
-    auto predict_diff = ((sf32[-1] - sf32[-2]) + (sf32[1] - sf32[0])) / 2.0f;
+    // //auto predict_diff = ((sf32[-1] - sf32[-2]) + (sf32[1] - sf32[0])) / 2.0f;
+    // //auto predict_diff =  std::M (sf32[0] + sf32[1] + sf32[2] + sf32[3]) / 4 - (sf32[-1] + sf32[-2]) + (sf32[-3] + sf32[-4]) / 4;
+    // auto  prev_max = *std::max_element( sf32-8, sf32);
+    // auto  prev_min = *std::min_element( sf32-8, sf32);
+    // auto  cur_max = *std::max_element( sf32, sf32+8);
+    // auto  cur_min = *std::min_element( sf32, sf32+8);
+    // if ( intersection(prev_min, prev_max, cur_min, cur_max) )
+    //     return;
 
-    auto predict_sample = sf32[-1] +  predict_diff;
+    // auto diff =  (cur_max + cur_min)/2 - (prev_max + prev_min) / 2;
 
-    auto diff = sf32[0] - predict_sample;
+    // for (int i=0; i<16; ++i)
+    // {
 
-    for (int i=0; i<block_size; ++i)
-    {
-
-        auto step = linear(i,block_size, diff, 0);
-        if (std::abs(step)  < 0.00005f)
-            return;
-        sf32[i] -= step;
-    }
+    //     auto step = linear(i,16, diff, 0);
+    //     if (std::abs(step)  < 0.00005f)
+    //         return;
+    //     sf32[i] -= diff;
+    // }
 
 }
 
@@ -390,7 +399,7 @@ int main(int argc, char** argv)
 
     DMC_compressor_ref_model enc(&base_model);
     int prev_sample = 0;
-    int  q_opt = args.get('q',7,0,32768);
+    int  q_opt = args.get('q',128,1,1024);
     enc.put_symbol(SIGNATURE,0); //signature
     enc.put_symbol( ilog2_32( block_size,1 )-1, 0 );
     enc.put_symbol( q_opt, 0);

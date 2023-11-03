@@ -361,9 +361,9 @@ namespace pack
         }
 
         template <uint32_t bits>
-        uint32_t get_symbol_bits()
+        uint64_t get_symbol_bits()
         {
-            int res = 0;
+            uint64_t res = 0;
             for (int i = 0; i < bits; i++)
             {
                 res = res + res + get();

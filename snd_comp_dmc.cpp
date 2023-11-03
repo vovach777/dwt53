@@ -48,14 +48,14 @@ int main(int argc, char** argv)
 
     DMC_compressor enc(config);
     int prev_sample = 0;
-    bool put_symbol_opt = args.has("symbol");
+    bool use_bitplanes = args.has("use-bp");
     for (auto it = sf32, end = sf32 + samples_nb; it < end; ++it )
     {
 
-        int sample = *it * 32767;
+        int sample = *it * 32768;
         int diff = int_to_tinyint( sample - prev_sample);
-        prev_sample = std::clamp( prev_sample + tinyint_to_int(diff), -32767, 32767 );
-        if ( put_symbol_opt )
+        prev_sample = std::clamp( prev_sample + tinyint_to_int(diff), -32768, 32768 );
+        if ( !use_bitplanes )
         {
             enc.put_symbol(diff,1);
         } else {

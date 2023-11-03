@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include <iostream>
 #include <fstream>
 #include <cmath>
@@ -11,6 +12,8 @@
 #include <unistd.h>
 #define _chsize_s(d, s) ftruncate(d,s)
 #endif
+#include <array>
+#include <variant>
 #include "myargs/myargs.hpp"
 #include "the_matrix.hpp"
 #include "dmc.hpp"
@@ -21,6 +24,7 @@
 #include "timed.hpp"
 #include "bwt_mtf_rle.hpp"
 #include "huffman.hpp"
+#include "dkm.hpp"
 // #define no_dwt2d
 // #include "dwt53.hpp"
 using myargs::Args;
@@ -136,6 +140,25 @@ const int16_t ff_adpcm_step_table[89] = {
 };
 
 
+class MSE {
+    public:
+    void update(float ideal, float aproxymated) {
+        float error = aproxymated - ideal;
+        sum_sq += (error * error);
+        count++;
+    }
+    float value() {
+        return sum_sq / count;
+    }
+    void reset() {
+        sum_sq = 0.0;
+        count = 0;
+    }
+    private:
+    float sum_sq = 0.0;
+    size_t count = 0;
+};
+
  int encoder(int sample)
 {
     int delta  = sample - prev_sample;
@@ -166,7 +189,7 @@ const int16_t ff_adpcm_step_table[89] = {
     else
         prev_sample += diff;
 
-    prev_sample = std::clamp( prev_sample, -32768, 32768 );
+    prev_sample = std::clamp( prev_sample, -32767, 32767 );
     step_index  = std::clamp( step_index + ff_adpcm_index_table[nibble], 0, 88);
 
     return nibble;
@@ -193,12 +216,42 @@ int decoder(int nibble)
     if (sign) predictor -= diff;
     else predictor += diff;
 
-    prev_sample = std::clamp(predictor,-32768, 32767);
+    prev_sample = std::clamp(predictor,-32767, 32767);
 
     return prev_sample;
 
 }
 
+};
+
+
+class diff_codec {
+    public:
+    diff_codec()
+    {
+
+    }
+    int encode(float sample) {
+
+
+        auto pair = adpcm_cb.lockup_pair( round( (sample - prev_sample) * 256.0f) );
+        prev_sample = std::clamp( prev_sample  + pair.second * float(1.0/256.0) , -1.0f, 1.0f );
+
+        //std::cout << sample << " -> " << pair.first << std::endl;
+
+        return pair.first;
+    }
+    float decode(int diff) {
+        return prev_sample = std::clamp( prev_sample + adpcm_cb.get_codebook_value_at(diff) * float(1.0/256.0), -1.0f, 1.0f );
+    }
+    private:
+        float prev_sample = 0.0f;
+
+        Codebook adpcm_cb = Codebook( std::vector<int>{
+           //0, 60, 195, 501, 1190, 2742, 6240, 14123, 31887
+           //0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 14, 17, 23, 34, 149
+           0,1,2,3,4,6,12,136
+        });
 };
 
 #if 0
@@ -281,272 +334,28 @@ struct DPCMQ_codec_int {
     int prev_sample = 0;
     int clip_min   = -32768;
     int clip_max   = 32767;
-    pack::Huffman<uint8_t> huff;
-    std::unordered_map<uint8_t, size_t> freq;
-   // int center;
-
-    // int clip_diff;
-    // int shift_diff;
-    // int diff_bits;
-    // unsigned int probe = 0;
-    // std::vector<uint32_t> codebook;
-    // std::vector<int> map_to;
-    // std::vector<int> map_from;
 
     DPCMQ_codec_int(int bits)
     {
         clip_min = -(1 << (bits-1));
-        clip_max = (1 << (bits-1))-1;
-        // clip_diff  = (1 << (bits-5))-1;
-        // shift_diff =  (bits-5-bits_nb );
-        // if (  shift_diff < 0)
-        // {
-        //     diff_bits = bits_nb+shift_diff;
-        //     shift_diff = 0;
-
-        // } else
-        //   diff_bits = bits_nb;
-        // center = (bits-6);
-        // int i=0;
-        // map_to.resize(32);
-        // map_from.resize(32);
-        // for (auto v : {0,-1,-2,1,2,-3,-4,-5,-6,3,-7,-8,-9,-10,4})
-        // {
-        //     int value = center + v;
-        //     if (value < 0)
-        //       continue;
-        //     if (value >= bits)
-        //       continue;
-        //     map_to[i] = value;
-        //     map_from[ value ] = i;
-        //     i++;
-        //     if ( i == bits-1)
-        //         break;
-        // }
-
-        // for (int v=-11; i < bits-1; --v)
-        // {
-        //     int value = center + v;
-        //     if (value < 0)
-        //        break;
-        //     map_to[i] = value;
-        //     map_from[ value ] = i;
-        //     i++;
-        //     if ( i == bits)
-        //         break;
-        // }
-        // assert( i == bits-1);
-        // for (; i < 32; ++i)
-        // {
-        //     map_to[i]   = i;
-        //     map_from[i] = i;
-        // }
-        // for (int i = 0; i < bits; ++i)
-        // {
-        //     std::cout << i << " " << map_to[i] << " " << map_from[ map_to[i] ] << std::endl;
-        // }
-        // std::cout << std::endl;
-
+        clip_max =  (1 << (bits-1));
     }
 
 int encoder(int sample)
 {
+    int diff = findFibonacciIndex( sample - prev_sample);
 
-    int diff = int_to_tinyint( sample - prev_sample);
-
-    prev_sample = std::clamp( prev_sample + tinyint_to_int(diff), clip_min, clip_max );
-    std::cerr << (char)diff;
+    prev_sample = std::clamp( prev_sample + getFibonacciNumber(diff), clip_min, clip_max );
     return diff;
-
-    // int round_delta = q_step / (q_step,  delta + (delta >> 1);
-    // if (delta > clip_diff )
-    //     delta = clip_diff;
-    // delta >>= shift_diff;
-    //delta = int_to_tinyint(diff);
-
-    //diff_bits = std::max<int>( (bits-5), 4);
-    // if ( delta >= codebook.size() )
-    // {
-    //     codebook.resize( delta + 1, 0);
-    // }
-    // codebook[ delta ] += 1;
-
-
-
-
-    // if (delta >= map_from.size() ) {
-    //     std::cerr << "delta range error: " << delta << " of " << map_from.size()-1 << std::endl;
-    //     return 0;
-    // }
-
-//     if (probe) {
-//         probe--;
-//         int diff = sample - prev_sample;
-//         int sign = diff < 0 ? -1 : 1;
-//         int delta = diff*sign;
-//         int index = int_to_tinyint(delta);
-//         if (index >= codebook.size()) {
-//             codebook.resize(index+1);
-//         }
-//         float & cw = codebook[ index ];
-//         cw = cw ? (cw + delta) / 2.0f : delta;
-//         assert(sample == prev_sample + diff);
-//         prev_sample = sample;
-//         if (probe == 0) {
-//             std::cout << "codebook: ";
-//             for (const auto v : codebook) {
-//                 std::cout << std::fixed << std::setprecision(2) << v << " ";
-//             }
-//             std::cout << std::endl;
-//             for (int i=0; i<codebook.size(); ++i)
-//                 mtf.push_back(i);
-//         }
-//         return diff;
-//     } else {
-//         int diff = int_to_tinyint(sample - prev_sample);
-// //        int sign  = diff < 0 ? -1 : 1;
-// //        int qdiff = static_cast<int>(codebook[ std::min<int>( codebook.size()-1, diff*sign) ]) * sign;
-//         prev_sample = std::clamp<int>( prev_sample + tinyint_to_int(diff), clip_min, clip_max );
-//         return diff;
-//         // int res;
-//         // mtf_encode(mtf.begin(), mtf.end(), &delta, (&delta)+1, &res );
-//         // return res*sign;
-//     }
 }
-
-void show() {
-    // std::cout << "****" << std::endl;
-    // uint32_t max_element = *std::max_element(codebook.begin(), codebook.end());
-    // for (int i = 0; i < codebook.size(); ++i )
-    // {
-    //     std::cout << "#" << i << " " << tinyint_to_int(i) << " -> "  << (codebook[i] * 100 / max_element) << ((i==center) ? "*" : "") << std::endl;
-    // }
-}
-
 
 int decoder(int diff)
 {
-
-    // int sign = diff & 1;
-    // int delta = diff >> 1;
-    // diff = map_to.at(delta) * sign;
-    prev_sample = std::clamp(  prev_sample + tinyint_to_int( diff ), clip_min, clip_max );
+    prev_sample = std::clamp(  prev_sample + getFibonacciNumber( diff ), clip_min, clip_max );
     return prev_sample;
-
-    // int sign  = diff < 0 ? -1 : 1;
-    // int delta = diff * sign;
-    // if (probe) {
-    //     probe--;
-    //     int index = int_to_tinyint(delta);
-    //     if (index > codebook.size()) {
-    //         codebook.resize(index+1);
-    //     }
-    //     float& cw = codebook[ index ];
-    //     cw = cw ? ( cw + delta ) / 2.0f : delta;
-    //     prev_sample += delta;
-    //     if (probe == 0) {
-    //         std::cout << "codebook: ";
-    //         for (const auto v : codebook) {
-    //             std::cout << std::fixed << std::setprecision(2) << v << " ";
-    //         }
-    //         std::cout << std::endl;
-    //     }
-    // } else {
-    // // if (delta >= codebook.size()) {
-    // //     std::cerr << "error in stream!" << std::endl;
-    // //     return prev_sample;
-    // // }
-
-    //     //prev_sample += std::clamp<int>( prev_sample + static_cast<int>(codebook.at(delta))*sign,  clip_min, clip_max );
-    //     prev_sample += std::clamp<int>( prev_sample + tinyint_to_int(diff),  clip_min, clip_max );
-    // }
-    // return prev_sample;
-
 }
 
 };
-
-
-
-// class vector_coding
-// {
-
-//     public:
-
-
-//     void encode(float sample)
-//     {
-//         int isample = int( round(sample * range) );
-
-//         if  (isample == 0)
-//         {
-//            sine.push_back(0.0f);
-//            return;
-//         }
-
-//         if ( (sign ^ isample) >= 0  )     {
-//             sine.push_back(sample);
-//         } else {
-//             cross_ziro_count++;
-//             sign = -sign;
-//             if ( cross_ziro_count == 2)
-//             {
-//                 encode();
-//             }
-//             sine.push_back(sample);
-//         }
-//     }
-//     size_t size() {
-//         return codec.size();
-//     }
-//     void flush() {
-//         if (sine.size() > 0) {
-//             encode();
-//             sign = 1;
-//             prev_sine.clear();
-//             sine.clear();
-//         }
-//     }
-//     std::vector<std::vector<int>> get_codes() {
-//         std::vector<std::vector<int>> ret;
-//         ret.swap(codec);
-//         return ret;
-//     }
-//     private:
-//     void encode() {
-//         cross_ziro_count = 0;
-
-//         prev_sine = resample(prev_sine, sine.size());
-
-//         // for (int i = 0; i < sine.size(); ++i)
-//         // {
-//         //     sine[i] -= prev_sine[i];
-//         // }
-//         auto& vec =  codec.emplace_back();
-
-//         for (int i = 0; i < sine.size(); ++i)
-//         {
-//             auto code = static_cast<int>( sine[i] * range ) -  static_cast<int>(prev_sine[i] * range );
-//             vec.push_back(code);
-//             //std::cout << std::setw(3) << code << " ";
-//         }
-//         //std::cout << std::endl;
-//         prev_sine = sine;
-//         sine.clear();
-//     }
-
-
-//     int range = 32767;
-//     int sign = 1;
-//     int cross_ziro_count = 0;
-// //    int mixin = 0;
-
-//     std::vector<std::vector<int>> codec;
-//     std::vector<float> sine;
-//     std::vector<float> prev_sine;
-// };
-
-
 
 
 
@@ -594,80 +403,180 @@ try
 
     bool trace_opt = args.has("trace");
     profiling::timed execution_time;
+
     if (!args.has('d'))
     {
+        bool opt_mono = args.has("mono");
+        int channels_nb = opt_mono ? 1 : 2;
+        auto sample =  reinterpret_cast<const float*>( mmap.data() );
+        size_t samples_nb = mmap.size() / 4 / channels_nb;
+
+
+
+        int discretize = args.get("discretize",1024,1 << 8,1 << 24);
+        std::vector<size_t> vectors(discretize);
+
+        if (args.has("stat")) {
+            std::cout << "stat N=" << samples_nb << " discretize=" << discretize << std::endl;
+            auto sample =  reinterpret_cast<const float*>( mmap.data() );
+            float prev = 0.0f;
+            for (size_t n=0; n < samples_nb; ++n)
+            {
+                vectors.at( std::min DUMMY (discretize-1,  int(std::abs(*sample - prev) * discretize)) )++;
+                prev = *sample;
+                sample += channels_nb;
+            }
+            std::vector<std::array<double, 2>> dataset;
+            for (int i = 0; i < discretize; ++i) {
+                size_t count = vectors.at(i);
+                if (count > 0 /* samples_nb/discretize/8 */ ) {
+                    auto & array = dataset.emplace_back();
+                    array[0] = double(i);
+                    array[1] = double(count);
+                }
+            }
+            std::cout << "dataset size=" << dataset.size() << std::endl;
+            auto cluster_data = dkm::kmeans_lloyd(dataset,args.get("size",16,2,1024) );
+            std::cout << "Means:" << std::endl;
+            std::vector<int> values;
+            for (const auto& mean : std::get<0>(cluster_data)) {
+                std::cout << "\t(" << int(mean[0]) << "," << int( mean[1]) << ")" << std::endl;
+                values.push_back(mean[0]);
+            }
+            std::sort(values.begin(), values.end());
+            for (auto v : values)
+                std::cout << v << ", ";
+            std::cout << std::endl;
+            //std::cout << "\nCluster labels:" << std::endl;
+            // std::cout << "\tPoint:";
+            // for (const auto& point : dataset) {
+            //     std::stringstream value;
+            //     value << "(" << point[0] << "," << point[1] << ")";
+            //     std::cout << std::setw(14) << value.str();
+            // }
+            // std::cout << std::endl;
+            // std::cout << "\tLabel:";
+            // for (const auto& label : std::get<1>(cluster_data)) {
+            //     std::cout << std::setw(14) << label;
+            // }
+            return 0;
+        }
+
+        if (args.has("vec")) {
+            std::cout << "vec N=" << samples_nb << " discretize=" << discretize << std::endl;
+            auto sample =  reinterpret_cast<const float*>( mmap.data() );
+            float prev = 0.0f;
+            std::vector<std::array<float, 8>> dataset;
+
+            for (size_t n=0; n < samples_nb*channels_nb-8 &&  dataset.size() < discretize; n+=8)
+            {
+                auto& array = dataset.emplace_back();
+                std::copy(sample, sample+8, std::begin(array));
+                sample+=8;
+
+            }
+
+            std::cout << "dataset size=" << dataset.size() << std::endl;
+            auto cluster_data = dkm::kmeans_lloyd(dataset,args.get("size",16,2,1024),dataset.size()*2,1.0f/1024.0f );
+            auto & means = std::get<0>(cluster_data);
+            std::cout << "Means:" << std::endl;
+
+            for (const auto& mean : means ) {
+
+                std::cout << "\t(";
+                for (auto v : mean)
+                    std::cout << int(v*1024) << ",";
+                std::cout << "\b)" << std::endl;
+            }
+            std::cout << std::endl;
+
+            std::string output_filename =  args[1] + ".vec.raw";
+            auto outsize = mmap.size();
+
+            createEmptyFile(output_filename,outsize);
+
+            auto rw_mmap = mio::make_mmap<mio::ummap_sink>(output_filename, 0, outsize, error);
+            if (error)
+            {
+                std::cout << error.message() << std::endl;
+                return 1;
+            }
+
+            auto sample_in =  reinterpret_cast<const float*>( mmap.data() );
+            auto sample_out =  reinterpret_cast<float*>( rw_mmap.data() );
+
+
+
+            for (const float* sample = sample_in; sample < sample_in + (mmap.size() / 4) -8; sample += 8, sample_out += 8)
+            {
+
+                std::array<float, 8> array;
+                std::copy(sample, sample+8, std::begin(array));
+                auto index = dkm::details::closest_mean( array, means);
+                std::copy( std::begin( means[index] ),  std::end( means[index] ), sample_out );
+                if (trace_opt) {
+                    for (auto v :  means[index]  )
+                        std::cout << int(v*1024) << ",";
+                    std::cout << std::endl;
+                }
+            }
+
+
+            //std::cout << "\nCluster labels:" << std::endl;
+            // std::cout << "\tPoint:";
+            // for (const auto& point : dataset) {
+            //     std::stringstream value;
+            //     value << "(" << point[0] << "," << point[1] << ")";
+            //     std::cout << std::setw(14) << value.str();
+            // }
+            // std::cout << std::endl;
+            // std::cout << "\tLabel:";
+            // for (const auto& label : std::get<1>(cluster_data)) {
+            //     std::cout << std::setw(14) << label;
+            // }
+            return 0;
+        }
+
+
         DMCModelConfig config;
         config.threshold = 4;
         config.bigthresh = 40;
         config.reset_on_overflow = false;
         config.maxnodes = 1ULL << 23;
 
-        DMCModel model_L(config);
-        DMCModel model_R(config);
 
-        DMC_compressor_ref_model enc(&model_L);
+        DMC_compressor enc(config);
 
-        auto sample =  reinterpret_cast<const float*>( mmap.data() );
-        bool opt_mono = args.has("mono");
-        size_t samples_nb = mmap.size() / 4 / (opt_mono ? 1 : 2);
         enc.put_symbol_bits<64>(samples_nb);
-        int opt_bits = args.get("bits",16,4,30);
+        int opt_bits = args.get("bits",16,16,16);
         enc.put_symbol(opt_bits,0);
-        float float_to_int_multipler = 1 << (opt_bits-1);
+        enc.put(opt_mono);
 
-        // DPCMQ_codec_int DPCMQ_L(opt_bits);
-        // DPCMQ_codec_int DPCMQ_R(opt_bits);
-        std::cout << "total samples: " << samples_nb << std::endl;
-        // enc.set_model(&model_L);
-        std::vector<vector_coding> vc( opt_mono ? 1 : 2);
+        float float_to_int_multipler = (1 << (opt_bits-1)) - 1;
 
-        auto n = samples_nb;
-        while (n--)
+        std::vector<diff_codec> codecs;
+        for (int i=0; i < channels_nb; ++i)
+            codecs.emplace_back();
+
+        std::cout <<  samples_nb << " samples, " <<(opt_mono ? " mono" : " stereo") << ", " << opt_bits << " bits." << std::endl;
+
+
+        for (size_t n=0; n < samples_nb; ++n)
         {
-            // enc.put_symbol_bits<3>( DPCMQ_L.encoder( *sample++ * float_to_int_multipler) );
-            // enc.put_symbol_bits<3>( DPCMQ_R.encoder( *sample++ * float_to_int_multipler) );
-            #if 0
-            auto ch0 = DPCMQ_L.encoder( std::clamp<float>(*sample++,-1.0, 1.0) * float_to_int_multipler );
-            auto ch1 = DPCMQ_R.encoder( std::clamp<float>(*sample++,-1.0, 1.0) * float_to_int_multipler );
-            enc.put_symbol(ch0,1);
-            enc.put_symbol(ch1,1);
-            #endif
-            for (auto & _vc : vc)
-                _vc.encode( std::clamp<float>(*sample++,-1.0, 1.0) );
-
-        }
-
-        for (auto & _vc : vc)
-        {
-            _vc.flush();
-            size_t len_test = 0;
-
-            for (auto & vec : _vc.get_codes())
-            {
-                //assert(codes[i] >= 0);
-                //assert(codes[i+1] >= 0);
-                enc.set_model( &model_L);
-                len_test += vec.size();
-
-
-                enc.put_symbol(vec.size() ,0);
-
-                enc.set_model( &model_R);
-                for ( auto val : vec ) {
-                   enc.put_symbol(val,1);
-                }
+            for (auto & codec : codecs ) {
+                enc.put_symbol( codec.encode( *sample++) ,1);
+                //enc.put_symbol( codec.encode( std::clamp<float>(*sample,-1.0f, 1.0f) * float_to_int_multipler ) ,1);
+                //enc.put_symbol( codec.encode( std::clamp<float>(*sample,-1.0f, 1.0f) * float_to_int_multipler ) ,1);
             }
-            std::cout << len_test << " expected " << samples_nb << std::endl;
+
         }
+
         auto encoded = enc.finish();
 
-        // DPCMQ_L.show();
-        // DPCMQ_R.show();
-
         std::cout << std::endl;
-        std::cout << "nodes: " << model_L.get_nodes_count() <<  "/" << model_R.get_nodes_count() << std::endl;
+        std::cout << "nodes: " << enc.get_nodes_count() << std::endl;
         std::cout << "compressed size: " << encoded.size() << std::endl;
-        std::string output_filename =  ( args.size() > 2 ) ? args[2] :  args[1] + ".sdmc";
+        std::string output_filename =  ( args.size() > 2 ) ? args[2] :  args[1] + ".sdmc2";
         std::ofstream output(output_filename, std::ios::binary);
         if (!output) {
             std::cerr << "can not create output file!!!" << std::endl << "ERROR (" << errno << ") : " <<  strerror(errno) << std::endl;
@@ -677,26 +586,28 @@ try
     }
     else
     {
+
         DMCModelConfig config;
         config.threshold = 4;
         config.bigthresh = 40;
         config.reset_on_overflow = false;
         config.maxnodes = 1ULL << 23;
 
+        DMC_decompressor dec(mmap.cbegin(), mmap.cend(), config);
 
-        DMCModel model_L(config);
-        DMCModel model_R(config);
-        DMC_decompressor_ref_model dec(mmap.cbegin(), mmap.cend(),&model_L);
-
-        auto blocks_nb = dec.get_symbol_bits<64>();
+        auto samples_nb = dec.get_symbol_bits<64>();
         int opt_bits = dec.get_symbol(0);
-        float float_to_int_multipler = 1 << (opt_bits-1);
+        float float_to_int_multipler = 1.0f / ( (1 << (opt_bits-1))-0 );
+        bool opt_mono = dec.get();
+        int channels_nb = opt_mono ? 1 : 2;
+        std::cout << samples_nb << " samples"  << (opt_mono ? ", mono" : ", stereo") << ", " << ( opt_bits ) << " bits." << std::endl;
 
-        DPCMQ_codec_int DPCMQ_L(opt_bits);
-        DPCMQ_codec_int DPCMQ_R(opt_bits);
+        std::vector<diff_codec> codecs;
+        for (int i = 0; i < channels_nb; ++i)
+            codecs.emplace_back();
 
         std::string output_filename =  ( args.size() > 2 ) ? args[2] :  args[1] + ".f32.raw";
-        auto outsize = blocks_nb*2*4;
+        auto outsize = samples_nb*4*channels_nb;
 
         createEmptyFile(output_filename,outsize);
 
@@ -709,117 +620,21 @@ try
         auto sample =  reinterpret_cast<float*>( rw_mmap.data() );
 
 
-        int sign = 1;
-        int delta = 0;
-        int prev_sample = 0;
-        size_t samples_nb=0;
-        int channel = 0;
-
-        while ( channel < 2 )
+        for (size_t n = 0; n <  samples_nb; ++n)
         {
-            // int ch0 = DPCMQ_L.decoder( dec.get_symbol(1) );
-            // int ch1 = DPCMQ_R.decoder( dec.get_symbol(1) );
-            dec.set_model(&model_L);
-            int diff = dec.get_symbol(1);
-            dec.set_model(&model_R);
-            int length = dec.get_symbol(0);
+            for (auto & codec : codecs) {
+                *sample++ = codec.decode( dec.get_symbol(1) );
+                //*sample++ = std::clamp<float>( codec.decode( dec.get_symbol(1) ) * float_to_int_multipler, -1.0f, 1.0f);
+                // int a = codec.decode( dec.get_symbol(1) );
+                // int b = codec.decode( dec.get_symbol(1) );
+                // *sample++ = std::clamp<float>( ((a + b) / 2) * float_to_int_multipler, -1, 1);
+            }
 
 
-                int new_sample = std::clamp(prev_sample + tinyint_to_int(diff), -32767, 32767 );
-                //sign = -sign;
-                samples_nb += length;
-                if ( samples_nb > blocks_nb) {
-                    std::cout << "lost sync!!!" << std::endl;
-                    return 1;
-                }
-                for (int i = 0; i < length; ++i) {
-
-                    *sample = linear(i+1,length+1,prev_sample, new_sample ) / float_to_int_multipler;
-                    sample += 2;
-
-                }
-                prev_sample = new_sample;
-                if ( samples_nb == blocks_nb) {
-                    channel++;
-                    sample =  reinterpret_cast<float*>( rw_mmap.data() ) + channel;
-                    samples_nb = 0;
-                    sign = 1;
-                    delta = 0;
-                    prev_sample = 0;
-                }
-
-            // *sample++ = std::clamp<float>( ch0 / float_to_int_multipler, -1.0, 1.0);
-            // *sample++ = std::clamp<float>( ch1 / float_to_int_multipler, -1.0, 1.0);
         }
 
     }
 
-    // #if 0
-    //     //encoder
-    //     DMCModelConfig config;
-    //     config.threshold = 4;
-    //     config.bigthresh = 40;
-    //     config.reset_on_overflow = false;
-    //     config.maxnodes = 1ULL << 23;
-    //     DMC_compressor enc(config);
-    //     //ADPCM4_codec codec;
-    //     DPCMQ_codec left_codec;
-    //     DPCMQ_codec right_codec;
-    //         auto sample =  reinterpret_cast<const float*>( mmap.data() );
-    //         size_t samples_nb = mmap.size() / 4 / 2;
-    //         enc.put_symbol_bits<64>( samples_nb );
-
-    //         while (samples_nb--)
-    //         {
-    //             enc.put_symbol( left_codec.encoder( *sample++), 1);
-    //             enc.put_symbol( right_codec.encoder( *sample++), 1);
-    //         }
-
-    //     auto encoded = enc.finish();
-
-    //     std::cout << std::endl;
-    //     std::cout << "nodes: " << enc.get_nodes_count() << std::endl;
-    //     std::cout << "compressed size: " << encoded.size() << std::endl;
-    //     std::string output_filename =  ( args.size() > 2 ) ? args[2] :  args[1] + ".sdmc";
-    //     std::ofstream output(output_filename, std::ios::binary);
-    //     if (!output) {
-    //         std::cerr << "can not create output file!!!" << std::endl << "ERROR (" << errno << ") : " <<  strerror(errno) << std::endl;
-    //         return 1;
-    //     }
-    //     output.write(reinterpret_cast<const char*>(encoded.data()),encoded.size());
-
-    //     //decoder
-    //     DMCModelConfig config;
-    //     config.threshold = 4;
-    //     config.bigthresh = 40;
-    //     config.reset_on_overflow = false;
-    //     config.maxnodes = 1ULL << 23;
-    //     DMC_decompressor dec(mmap.cbegin(), mmap.cend(), config);
-
-    //     DPCMQ_codec left_codec;
-    //     DPCMQ_codec right_codec;
-    //     size_t samples_nb = dec.get_symbol_bits<64>();
-
-    //     size_t outsize = samples_nb * 4 * 2;
-
-    //     std::string output_filename =  ( args.size() > 2 ) ? args[2] :  args[1] + ".ulaw.raw";
-
-    //     createEmptyFile(output_filename,outsize);
-
-    //     auto rw_mmap = mio::make_mmap<mio::ummap_sink>(output_filename, 0, outsize, error);
-    //     if (error)
-    //     {
-    //         std::cout << error.message() << std::endl;
-    //         return 1;
-    //     }
-    //     auto sample =  reinterpret_cast<float*>( rw_mmap.data() );
-
-    //     while (samples_nb--)
-    //     {
-    //         *sample++ = left_codec.decoder( dec.get_symbol(1) );
-    //         *sample++ = right_codec.decoder( dec.get_symbol(1) );
-    //     }
-    // #endif
 
 } catch (const std::exception & e) {
     std::cerr << e.what() << std::endl;

@@ -20,7 +20,7 @@
             create_lockup_table();
         }
 
-        Codebook(std::initializer_list<int> il) : codebook(il) {
+        Codebook(const std::vector<int> & il) : codebook(il) {
             create_lockup_table();
         }
 
